@@ -2,6 +2,7 @@
 import { ensureSchema } from './database/db.js';
 import { validateInvoice } from './services/validate.js';
 import * as inv from './services/invoiceService.js';
+import * as products from './services/productService.js';
 import { handlers } from './services/dashboardService.js';
 import { errorResponse, invalid, notFound } from './http.js';
 
@@ -10,7 +11,21 @@ const idOf = (s) => (/^\d+$/.test(s) ? Number(s) : null);
 
 async function route(method, seg, query, body) {
   const [, area, a, extra] = seg; // seg[0] === 'api'
-  if (seg[0] !== 'api' || extra !== undefined) return null;
+  if (seg[0] !== 'api') return null;
+
+  if (area === 'products') {
+    if (a === undefined && extra === undefined) {
+      if (method === 'GET') return () => products.list().then(ok);
+      if (method === 'POST') return () => products.create(body).then((r) => ok(r, 201));
+    }
+    if (extra === undefined && a !== undefined) {
+      const id = idOf(a);
+      if (method === 'PUT') return () => products.update(id, body).then((r) => (r ? ok(r) : notFound('Product/service option not found')));
+      if (method === 'DELETE') return () => products.remove(id).then((r) => (r ? { status: 204 } : notFound('Product/service option not found')));
+    }
+    return null;
+  }
+  if (extra !== undefined) return null;
 
   if (area === 'invoices') {
     if (a === undefined) {

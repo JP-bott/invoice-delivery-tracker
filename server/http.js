@@ -1,11 +1,16 @@
 export class HttpError extends Error {
   constructor(status, message, code) { super(message); this.status = status; this.code = code; }
 }
-const DUP = { error: { code: 'DUPLICATE', message: 'Invoice number already exists', fields: { invoice_no: 'Invoice number already exists' } } };
+const DUP = { error: { code: 'DUPLICATE', message: 'Value already exists' } };
 
 // Maps any thrown error to { status, body }.
 export function errorResponse(e) {
-  if (/UNIQUE/i.test(e.message)) return { status: 409, body: DUP };
+  if (/UNIQUE/i.test(e.message)) {
+    const invoice = /invoice_no/i.test(e.message);
+    return invoice
+      ? { status: 409, body: { error: { code: 'DUPLICATE', message: 'Invoice number already exists', fields: { invoice_no: 'Invoice number already exists' } } } }
+      : { status: 409, body: DUP };
+  }
   const status = e.status || 500;
   const code = e.code && status !== 500 ? e.code : status === 400 ? 'BAD_REQUEST' : 'SERVER_ERROR';
   if (status === 500) console.error(e);

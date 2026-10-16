@@ -22,6 +22,15 @@ export function getDb() {
 // Idempotent (CREATE ... IF NOT EXISTS), one round trip. Never drops or alters existing data.
 export async function initSchema(c = getDb()) {
   await c.batch(SCHEMA_STATEMENTS, 'write');
+  const marker = (await c.execute({ sql: 'SELECT value FROM schema_meta WHERE key = ?', args: ['product_options_seeded'] })).rows[0];
+  if (!marker) {
+    const now = new Date().toISOString();
+    const defaults = ['Rice 50kg', 'Cement', 'Office Supplies', 'IT Services', 'Medical Gloves'];
+    await c.batch([
+      ...defaults.map((name) => ({ sql: 'INSERT OR IGNORE INTO product_options (name, created_at, updated_at) VALUES (?, ?, ?)', args: [name, now, now] })),
+      { sql: 'INSERT INTO schema_meta (key, value) VALUES (?, ?)', args: ['product_options_seeded', '1'] },
+    ], 'write');
+  }
 }
 
 // Memoised per process/cold start; a failed attempt is retried on the next request.

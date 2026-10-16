@@ -12,6 +12,14 @@ export const SCHEMA_STATEMENTS = [
   ...['date_issued', 'client_name', 'product_service', 'payment_status', 'delivery_date'].map(
     (col) => `CREATE INDEX IF NOT EXISTS idx_invoices_${col} ON invoices(${col})`,
   ),
+  `CREATE TABLE IF NOT EXISTS product_options (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS schema_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL)`,
 ];
 
 export const INVOICE_COLUMNS = [

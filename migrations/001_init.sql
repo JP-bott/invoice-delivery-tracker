@@ -20,3 +20,13 @@ CREATE INDEX IF NOT EXISTS idx_invoices_product_service ON invoices(product_serv
 CREATE INDEX IF NOT EXISTS idx_invoices_payment_status ON invoices(payment_status);
 
 CREATE INDEX IF NOT EXISTS idx_invoices_delivery_date ON invoices(delivery_date);
+
+CREATE TABLE IF NOT EXISTS product_options (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS schema_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL);
