@@ -1,9 +1,29 @@
-import { cardClass } from '../../utils/constants.js';
-export default function ChartCard({ title, data, children }) {
+import { BarChart3 } from 'lucide-react';
+import { EmptyState } from '../ui.jsx';
+
+export default function ChartCard({ title, description, data, action, className = '', children }) {
   return (
-    <section className={cardClass}>
-      <h2 className="mb-2 text-sm font-medium">{title}</h2>
-      {data?.length ? children : <p className="py-16 text-center text-sm text-slate-400">No data for these filters</p>}
+    <section className={`card card-pad min-w-0 ${className}`}>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0"><h2 className="section-title">{title}</h2>{description && <p className="mt-0.5 text-xs text-fg-muted">{description}</p>}</div>
+        {action}
+      </div>
+      {data?.length ? children : <EmptyState compact icon={BarChart3} title="No data for these filters" description="Try a wider date range or clear the client and product filters." />}
     </section>
   );
 }
+
+export const ChartTooltip = ({ active, payload, label, format, labelKey }) => {
+  if (!active || !payload?.length) return null;
+  const heading = labelKey ? payload[0].payload[labelKey] : label;
+  return (
+    <div className="rounded-lg bg-tooltip px-3 py-2 text-xs text-tooltip-fg shadow-pop">
+      {heading != null && <p className="mb-1 font-semibold">{heading}</p>}
+      {payload.map((p) => (
+        <p key={p.dataKey ?? p.name} className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full" style={{ background: p.color || p.payload?.fill }} aria-hidden="true" />
+          <span className="opacity-80">{p.name}</span><span className="num ml-auto pl-3 font-medium">{format ? format(p.value, p) : p.value}</span>
+        </p>))}
+    </div>
+  );
+};

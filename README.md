@@ -2,6 +2,15 @@
 
 Plain **React + Vite + Tailwind + Recharts** single-page app. There is no Express/Node server: the only server-side code is one small Vercel function (`api/index.js`) that talks to Turso, so the database token never reaches the browser.
 
+## UI design system
+The interface is a token-based design system built on the existing stack (no new component framework).
+- **Tokens**: `client/src/index.css` defines semantic colour, radius, shadow, spacing and motion tokens for light and dark themes (`bg-surface`, `text-fg-muted`, `border-line`, `--chart-*`, `--aging-*`). Change a token once and the whole app follows.
+- **Theme**: light/dark toggle in the top bar, saved in `localStorage`, follows the OS until you choose, applied before first paint (inline script in `client/index.html`).
+- **Shell**: collapsible sidebar (drawer on phones), top bar with global search (opens `/invoices?q=...`), skip link, route transitions.
+- **Shared components** (`client/src/components`): `Modal` (focus trap, Escape, scroll lock, inert background), `Toast` (raised only after the API answers), `ui.jsx` (tooltip/hover card, info tips, action menu, skeleton, empty state, page header), `StatusBadge` (icon + text + colour).
+- **Font**: Inter Variable via `@fontsource-variable/inter` (self-hosted). Currency and counts use tabular numerals.
+- Motion respects `prefers-reduced-motion`.
+
 ## Project layout
 ```
 client/src/             React app: pages/, components/ (dashboard/, invoices/), utils/
@@ -52,6 +61,13 @@ npm run build     # vite build -> client/dist
 
 ## Business rules (unchanged)
 Money is integer centavos; status / amount-paid rules are enforced server-side; delivery status is derived from Delivery Date; invoice numbers are trimmed and unique case-insensitively (SQLite NOCASE folds ASCII only); the dashboard excludes Cancelled except the status distribution and recent list; dates use Asia/Manila. Dashboard client/product filters are exact match; invoice-list filters are "contains". Dashboard analytics calculate outstanding balances from amount minus amount paid, classify invoices by the optional Due Date, and show a No due date category. Collected Revenue is grouped by invoice issue month because the schema does not store payment dates; this limitation is shown in the dashboard.
+
+## UI changes that touch behaviour
+- The old "Invoice pulse" card was removed from the dashboard: it bucketed unpaid invoices by *issue* date, which conflicted with the due-date based Outstanding Receivables chart. The `/api/dashboard/invoice-status` endpoint is unchanged.
+- Dashboard KPI cards for Outstanding Balance and Pending Payments now open the unpaid invoice list; the invoice list's Payment filter gained an "Unpaid" option so that link shows the right value.
+- Fixed: collapse/expand of client groups in the analytics dialog, and numeric sorting by amount in that dialog.
+- "Add Invoice" in the sidebar/top bar opens the form via `/invoices?new=1`.
+- Invoice rows show a derived "Overdue" tag (unpaid, due date before today, Asia/Manila). It is a display hint, separate from the stored payment status.
 
 ## Not implemented (also absent from the original source)
 Settings page and runtime Turso switching, demo login, CSV export, Top Products value/count toggle, Delivery Overview chart, row-click details on the recent list.

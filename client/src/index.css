@@ -1,1 +1,248 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+/* Dark mode is class-based so the choice can be applied before first paint (see index.html). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------
+   Design tokens
+   Every colour in the UI comes from these semantic tokens. Components use
+   utilities such as `bg-surface`, `text-fg-muted`, `border-line`, so the
+   light/dark switch only has to redefine the variables below.
+   ------------------------------------------------------------------ */
+:root {
+  --canvas: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f2f4f7;       /* muted fills: table headers, inputs hover */
+  --surface-3: #e9ecf1;
+  --line: #e4e7ec;
+  --line-strong: #cfd4dc;
+
+  --fg: #14171f;
+  --fg-muted: #555e6e;
+  --fg-subtle: #7b8494;
+
+  --brand: #4f46e5;
+  --brand-hover: #4338ca;
+  --brand-fg: #ffffff;
+  --brand-soft: #eef0ff;
+  --brand-ink: #3730a3;
+
+  --success: #16a34a;  --success-soft: #e8f6ed;  --success-ink: #166534;
+  --warning: #d97706;  --warning-soft: #fdf3dd;  --warning-ink: #92520a;
+  --danger:  #dc2626;  --danger-soft:  #fdeceb;  --danger-ink:  #b42318;
+  --info:    #0284c7;  --info-soft:    #e6f3fb;  --info-ink:    #075985;
+
+  --tooltip-bg: #14171f;
+  --tooltip-fg: #f4f5f7;
+
+  /* Chart palette: validated for contrast on both themes */
+  --chart-1: #4f46e5;
+  --chart-2: #0d9488;
+  --chart-3: #d97706;
+  --chart-4: #0284c7;
+  --chart-5: #9333ea;
+  --chart-grid: #e4e7ec;
+  --chart-muted: #b5bcc8;
+
+  --aging-overdue: #dc2626;
+  --aging-today: #ea580c;
+  --aging-week: #d97706;
+  --aging-month: #ca8a04;
+  --aging-next30: #0d9488;
+  --aging-upcoming: #0284c7;
+  --aging-noDue: #94a3b8;
+
+  /* Spacing / layout tokens */
+  --page-pad: 1rem;
+  --page-max: 88rem;
+  --sidebar-w: 15rem;
+  --sidebar-w-collapsed: 4.25rem;
+  --topbar-h: 3.5rem;
+  --row-h: 3rem;
+
+  --elev-card: 0 1px 2px rgb(16 24 40 / 0.04);
+  --elev-pop: 0 12px 32px -8px rgb(16 24 40 / 0.18), 0 2px 6px rgb(16 24 40 / 0.06);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #0d0f14;
+  --surface: #15181f;
+  --surface-2: #1b1f28;
+  --surface-3: #242935;
+  --line: #262b36;
+  --line-strong: #363d4c;
+
+  --fg: #eef0f4;
+  --fg-muted: #a4acbb;
+  --fg-subtle: #7d8697;
+
+  --brand: #7c83ff;
+  --brand-hover: #9399ff;
+  --brand-fg: #0d0f14;
+  --brand-soft: #1f2347;
+  --brand-ink: #c3c7ff;
+
+  --success: #34c26a;  --success-soft: #12281b;  --success-ink: #7be0a2;
+  --warning: #f0a53a;  --warning-soft: #2e2210;  --warning-ink: #f6c777;
+  --danger:  #f2655c;  --danger-soft:  #2f1816;  --danger-ink:  #ff9a93;
+  --info:    #3da5e0;  --info-soft:    #10273a;  --info-ink:    #8cd0f5;
+
+  --tooltip-bg: #eef0f4;
+  --tooltip-fg: #14171f;
+
+  --chart-1: #8c92ff;
+  --chart-2: #2dd4bf;
+  --chart-3: #f0a53a;
+  --chart-4: #4cb4ee;
+  --chart-5: #c084fc;
+  --chart-grid: #262b36;
+  --chart-muted: #556075;
+
+  --aging-overdue: #f2655c;
+  --aging-today: #fb8a4c;
+  --aging-week: #f0a53a;
+  --aging-month: #e2bd3b;
+  --aging-next30: #2dd4bf;
+  --aging-upcoming: #4cb4ee;
+  --aging-noDue: #7d8697;
+
+  --elev-card: 0 0 0 rgb(0 0 0 / 0);
+  --elev-pop: 0 16px 40px -8px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.04);
+
+  color-scheme: dark;
+}
+
+@media (min-width: 768px) { :root { --page-pad: 1.5rem; } }
+@media (min-width: 1280px) { :root { --page-pad: 2rem; } }
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-ink: var(--brand-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+  --color-tooltip: var(--tooltip-bg);
+  --color-tooltip-fg: var(--tooltip-fg);
+
+  --shadow-card: var(--elev-card);
+  --shadow-pop: var(--elev-pop);
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--canvas);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: var(--brand-soft); color: var(--brand-ink); }
+  button:not(:disabled), [role="button"], select, summary { cursor: pointer; }
+  input[type="date"] { min-height: 2.25rem; }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
+}
+
+/* ------------------------------------------------------------------
+   Reusable component classes (kept small; layout stays in JSX)
+   ------------------------------------------------------------------ */
+@layer components {
+  .card { @apply rounded-xl border border-line bg-surface shadow-card; }
+  .card-pad { @apply p-4 sm:p-5; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-subtle; }
+  .page-title { @apply text-xl font-semibold tracking-tight text-fg sm:text-2xl; }
+  .section-title { @apply text-sm font-semibold text-fg; }
+  .muted { @apply text-sm text-fg-muted; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum", "cv11"; }
+
+  .btn {
+    @apply inline-flex h-9 select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50;
+    transition-duration: var(--dur-fast);
+  }
+  .btn-primary { @apply bg-brand text-brand-fg shadow-sm hover:bg-brand-hover active:translate-y-px; }
+  .btn-secondary { @apply border border-line-strong bg-surface text-fg hover:bg-surface-2 active:translate-y-px; }
+  .btn-ghost { @apply text-fg-muted hover:bg-surface-2 hover:text-fg; }
+  .btn-danger { @apply bg-danger text-white hover:brightness-110 active:translate-y-px; }
+  .btn-sm { @apply h-8 px-3 text-[13px]; }
+  .btn-icon { @apply h-9 w-9 shrink-0 px-0; }
+
+  .input {
+    @apply block h-9 w-full rounded-lg border border-line-strong bg-surface px-3 text-sm text-fg shadow-sm outline-none transition placeholder:text-fg-subtle hover:border-fg-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-60;
+  }
+  textarea.input { @apply h-auto py-2; }
+  select.input { @apply pr-8; }
+  .input-error { @apply border-danger focus:border-danger focus:ring-danger/20; }
+  .label { @apply block text-[13px] font-medium text-fg; }
+
+  .badge {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs font-medium leading-4;
+  }
+  .badge-success { @apply bg-success-soft text-success-ink; }
+  .badge-warning { @apply bg-warning-soft text-warning-ink; }
+  .badge-danger { @apply bg-danger-soft text-danger-ink; }
+  .badge-info { @apply bg-info-soft text-info-ink; }
+  .badge-neutral { @apply bg-surface-2 text-fg-muted; }
+  .badge-muted { @apply bg-surface-2 text-fg-subtle line-through decoration-fg-subtle/60; }
+
+  .th { @apply whitespace-nowrap px-3 py-2.5 text-left text-xs font-medium text-fg-muted; }
+  .td { @apply px-3 py-2.5 align-middle; }
+}
+
+/* Skeleton shimmer */
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes slide-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.anim-fade { animation: fade-in var(--dur) var(--ease); }
+.anim-pop { animation: pop-in var(--dur) var(--ease); }
+.anim-slide { animation: slide-up var(--dur) var(--ease); }
+
+/* Recharts: remove default focus box, keep keyboard-visible ring on sectors */
+.recharts-wrapper, .recharts-surface { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

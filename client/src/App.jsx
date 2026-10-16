@@ -1,36 +1,43 @@
-import { useState } from 'react';
-import { NavLink, Route, Routes, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Receipt, Menu, Settings as SettingsIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import Dashboard from './pages/Dashboard.jsx';
 import Invoices from './pages/Invoices.jsx';
 import Settings from './pages/Settings.jsx';
-import { today } from './utils/dates.js';
+import Sidebar from './components/layout/Sidebar.jsx';
+import Topbar from './components/layout/Topbar.jsx';
+import { useStoredBool, useTheme } from './utils/theme.js';
 
-const link = ({ isActive }) => `flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${isActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`;
 export default function App() {
-  const [open, setOpen] = useState(false);
+  const { theme, toggle } = useTheme();
+  const [collapsed, setCollapsed] = useStoredBool('sidebar-collapsed', false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  useEffect(() => { setMobileOpen(false); window.scrollTo(0, 0); }, [pathname]);
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const onKey = (e) => e.key === 'Escape' && setMobileOpen(false);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
+
   return (
-    <div className="min-h-screen md:flex">
-      <aside className={`${open ? 'block' : 'hidden'} md:block w-full md:w-56 shrink-0 border-r border-slate-200 bg-white p-4`}>
-        <div className="mb-4 font-semibold">Invoice Tracker</div>
-        <nav aria-label="Main" className="space-y-1" onClick={() => setOpen(false)}>
-          <NavLink to="/" end className={link}><LayoutDashboard size={16} />Dashboard</NavLink>
-          <NavLink to="/invoices" className={link}><Receipt size={16} />Invoices & Transactions</NavLink>
-          <NavLink to="/settings" className={link}><SettingsIcon size={16} />Settings</NavLink>
-        </nav>
-      </aside>
-      <main className="flex-1 min-w-0 p-4 md:p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <button className="md:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu" aria-expanded={open}><Menu /></button>
-          <span className="ml-auto text-sm text-slate-500">{today()}</span>
-        </div>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </main>
+    <div className="min-h-dvh md:flex">
+      <a href="#main" className="sr-only z-[80] rounded-lg bg-surface px-3 py-2 text-sm font-medium shadow-pop focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Skip to content</a>
+      <Sidebar collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Topbar theme={theme} onToggleTheme={toggle} onOpenMenu={() => setMobileOpen(true)} />
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[var(--page-max)] flex-1 px-[var(--page-pad)] py-5 outline-none sm:py-6">
+          <div key={pathname} className="anim-fade">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/invoices" element={<Invoices />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
