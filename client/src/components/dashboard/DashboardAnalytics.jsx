@@ -1,0 +1,36 @@
+import { useState } from 'react';
+import { ArrowUpRight, CalendarClock, CircleAlert, Clock3, ReceiptText } from 'lucide-react';
+import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { peso } from '../../utils/api.js';
+import { cardClass } from '../../utils/constants.js';
+import AnalyticsModal from './AnalyticsModal.jsx';
+
+const COLORS = { overdue: '#ef4444', today: '#f97316', week: '#f59e0b', month: '#eab308', next30: '#14b8a6', upcoming: '#0ea5e9', noDue: '#94a3b8' };
+const ICONS = { overdue: CircleAlert, today: Clock3, week: CalendarClock, month: CalendarClock, next30: ArrowUpRight, upcoming: ArrowUpRight, noDue: ReceiptText };
+
+const revenueTooltip = ({ active, payload, label }) => active && payload?.length ? <div className="rounded-lg bg-slate-950 px-3 py-2 text-xs text-white shadow-xl"><p className="font-semibold">{label}</p><p className="mt-1 text-teal-300">Collected: {peso(payload[0]?.value || 0)}</p><p className="text-slate-300">Previous: {peso(payload[1]?.value || 0)}</p></div> : null;
+
+export default function DashboardAnalytics({ data }) {
+  const [modal, setModal] = useState(null);
+  if (!data) return null;
+  const revenue = data.revenue;
+  const categories = data.receivables.categories;
+  const chartData = categories.map((category) => ({ ...category, value: category.amount }));
+  const openCategory = (category) => setModal({ title: `${category.label} invoices`, records: category.records, range: `As of ${data.receivables.asOf}` });
+  const openRevenue = (month) => setModal({ title: `Collected revenue - ${month.label}`, records: revenue.records.filter((row) => row.date_issued.slice(0, 7) === month.key), amountKey: 'amount_paid', amountLabel: 'Collected', range: `${month.label} ${month.key.slice(0, 4)} - payment date is not stored; grouped by issue date` });
+
+  return <>
+    <section className="space-y-4">
+      <article className={`${cardClass} overflow-hidden bg-white`}>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Collected revenue</p><h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{peso(revenue.total)}</h2><p className="mt-1 text-xs text-slate-400">Selected period · teal is collected, gray is the comparison period</p></div><span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700">{revenue.proxy ? 'Issue-date payment proxy' : 'Payment records'}</span></div>
+        <div className="mt-5 h-[250px] w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={revenue.months} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} onClick={(event) => event?.activePayload?.[0]?.payload && openRevenue(event.activePayload[0].payload)}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#14b8a6" stopOpacity={0.32} /><stop offset="100%" stopColor="#14b8a6" stopOpacity={0.03} /></linearGradient></defs><CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} /><YAxis tickLine={false} axisLine={false} fontSize={11} tickFormatter={(value) => `₱${Math.round(value / 1000)}k`} /><Tooltip content={revenueTooltip} /><Area type="monotone" dataKey="comparison" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" fill="none" name="Previous" /><Area type="monotone" dataKey="value" stroke="#0f9f91" strokeWidth={3} fill="url(#revenueFill)" name="Collected" activeDot={{ r: 5, fill: '#0f9f91', stroke: '#fff', strokeWidth: 2 }} /></AreaChart></ResponsiveContainer></div>
+        <p className="text-[11px] text-slate-400">Click a month to inspect its invoices. Historical payment dates are not stored, so collected amounts are grouped by invoice issue date.</p>
+      </article>
+      <article className={`${cardClass} overflow-hidden`}>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Outstanding receivables</p><h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{peso(data.receivables.total)}</h2><p className="mt-1 text-xs text-slate-400">Unpaid balances as of {data.receivables.asOf}</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{categories.reduce((sum, category) => sum + category.count, 0)} invoices</span></div>
+        <div className="mt-5 grid gap-5 md:grid-cols-[230px_1fr] md:items-center"><div className="relative h-[230px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={chartData} dataKey="value" nameKey="label" innerRadius={67} outerRadius={94} paddingAngle={3} stroke="none" onClick={(entry) => entry?.key && openCategory(categories.find((category) => category.key === entry.key))}>{chartData.map((category) => <Cell key={category.key} fill={COLORS[category.key]} />)}</Pie><Tooltip formatter={(value) => peso(value)} /></PieChart></ResponsiveContainer><div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Balance</span><strong className="mt-1 text-lg text-slate-950">{peso(data.receivables.total)}</strong></div></div><div className="grid gap-2 sm:grid-cols-2">{categories.map((category) => { const Icon = ICONS[category.key]; return <button type="button" key={category.key} onClick={() => openCategory(category)} className="group relative flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-200"><span className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md" style={{ color: COLORS[category.key], backgroundColor: `${COLORS[category.key]}18` }}><Icon size={15} /></span><span className="min-w-0"><span className="block truncate text-xs font-medium text-slate-700">{category.label}</span><span className="block text-[11px] text-slate-400">{category.count} invoice{category.count === 1 ? '' : 's'} · {category.clients.length} client{category.clients.length === 1 ? '' : 's'}</span></span></span><span className="ml-2 shrink-0 text-xs font-semibold text-slate-800">{peso(category.amount)}</span><span className="pointer-events-none absolute bottom-full left-3 z-20 mb-2 hidden w-64 rounded-lg bg-slate-950 p-3 text-xs text-white shadow-xl group-hover:block group-focus:block">{category.label} - {category.clients.length} client{category.clients.length === 1 ? '' : 's'}<span className="mt-1 block space-y-1 text-slate-300">{category.clients.slice(0, 4).map((client) => <span className="block" key={client.name}>{client.name} · {client.count} invoice{client.count === 1 ? '' : 's'}</span>)}{category.clients.length > 4 && <span className="block text-slate-400">+ {category.clients.length - 4} more - click to view all</span>}</span></span></button>; })}</div></div>
+      </article>
+    </section>
+    {modal && <AnalyticsModal {...modal} onClose={() => setModal(null)} />}
+  </>;
+}

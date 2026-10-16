@@ -6,13 +6,15 @@ export function validateInvoice(b = {}) {
   const e = {}, t = (x) => (typeof x === 'string' ? x.trim() : '');
   const v = {
     date_issued: t(b.date_issued), invoice_no: t(b.invoice_no), cr_no: t(b.cr_no) || null,
-    client_name: t(b.client_name), product_service: t(b.product_service),
+    client_name: t(b.client_name), product_service: t(b.product_service), due_date: t(b.due_date) || null,
     payment_status: b.payment_status, delivery_date: t(b.delivery_date) || null, remarks: t(b.remarks) || null,
   };
   if (!dateOk(v.date_issued)) e.date_issued = 'Valid date required';
   if (!v.invoice_no) e.invoice_no = 'Required';
   if (!v.client_name) e.client_name = 'Required';
   if (!v.product_service) e.product_service = 'Required';
+  if (v.due_date && !dateOk(v.due_date)) e.due_date = 'Invalid date';
+  else if (v.due_date && v.due_date < v.date_issued) e.due_date = 'Cannot be earlier than Date Issued';
   if (!STATUSES.includes(v.payment_status)) e.payment_status = 'Invalid status';
   let amt, paid;
   try { amt = toCentavos(b.amount ?? ''); } catch { e.amount = 'Valid amount required (max 2 decimals)'; }

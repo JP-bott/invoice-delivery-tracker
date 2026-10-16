@@ -24,7 +24,7 @@ npm run dev            # Vite only; it serves /api from the same function code
 With no `TURSO_DATABASE_URL`, development uses a local SQLite file `./local.db`. To use Turso locally, copy `.env.example` to `.env` and fill it in (Vite loads it).
 
 ## Database
-- Production database: **Turso (libSQL)**, unchanged from the original project. Schema is created automatically and idempotently on the first request (`CREATE ... IF NOT EXISTS`); it never drops or alters data.
+- Production database: **Turso (libSQL)**. Schema is created automatically and idempotently on the first request (`CREATE ... IF NOT EXISTS`). Existing databases receive only the nullable `due_date` column when it is missing; no records are dropped or rewritten.
 - Manual init: `npm run db:init`, or `turso db shell <db-name> < migrations/001_init.sql`.
 - Optional demo data (idempotent): `npm run db:seed`.
 - **Moving existing records** from a local SQLite file into Turso (non-destructive: `INSERT OR IGNORE`, ids preserved):
@@ -51,7 +51,7 @@ npm run build     # vite build -> client/dist
 6. To bring existing records over, run the `copy-data.js` step above from your machine against the Turso URL.
 
 ## Business rules (unchanged)
-Money is integer centavos; status / amount-paid rules are enforced server-side; delivery status is derived from Delivery Date; invoice numbers are trimmed and unique case-insensitively (SQLite NOCASE folds ASCII only); the dashboard excludes Cancelled except the status distribution and recent list; dates use Asia/Manila. Dashboard client/product filters are exact match; invoice-list filters are "contains".
+Money is integer centavos; status / amount-paid rules are enforced server-side; delivery status is derived from Delivery Date; invoice numbers are trimmed and unique case-insensitively (SQLite NOCASE folds ASCII only); the dashboard excludes Cancelled except the status distribution and recent list; dates use Asia/Manila. Dashboard client/product filters are exact match; invoice-list filters are "contains". Dashboard analytics calculate outstanding balances from amount minus amount paid, classify invoices by the optional Due Date, and show a No due date category. Collected Revenue is grouped by invoice issue month because the schema does not store payment dates; this limitation is shown in the dashboard.
 
 ## Not implemented (also absent from the original source)
 Settings page and runtime Turso switching, demo login, CSV export, Top Products value/count toggle, Delivery Overview chart, row-click details on the recent list.

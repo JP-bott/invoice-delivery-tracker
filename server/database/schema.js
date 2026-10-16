@@ -4,7 +4,7 @@ export const SCHEMA_STATEMENTS = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date_issued TEXT NOT NULL,
     invoice_no TEXT NOT NULL COLLATE NOCASE UNIQUE,
-    cr_no TEXT, client_name TEXT NOT NULL, product_service TEXT NOT NULL,
+    cr_no TEXT, client_name TEXT NOT NULL, product_service TEXT NOT NULL, due_date TEXT,
     amount_centavos INTEGER NOT NULL DEFAULT 0 CHECK (amount_centavos >= 0),
     amount_paid_centavos INTEGER NOT NULL DEFAULT 0 CHECK (amount_paid_centavos >= 0 AND amount_paid_centavos <= amount_centavos),
     payment_status TEXT NOT NULL DEFAULT 'Pending' CHECK (payment_status IN ('Pending','Partially Paid','Paid','Cancelled')),
@@ -23,6 +23,6 @@ export const SCHEMA_STATEMENTS = [
 ];
 
 export const INVOICE_COLUMNS = [
-  'id', 'date_issued', 'invoice_no', 'cr_no', 'client_name', 'product_service',
+  'id', 'date_issued', 'invoice_no', 'cr_no', 'client_name', 'product_service', 'due_date',
   'amount_centavos', 'amount_paid_centavos', 'payment_status', 'delivery_date', 'remarks', 'created_at', 'updated_at',
 ];

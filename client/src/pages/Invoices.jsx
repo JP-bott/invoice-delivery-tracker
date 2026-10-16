@@ -9,7 +9,7 @@ import DeleteDialog from '../components/invoices/DeleteDialog.jsx';
 import Toast from '../components/Toast.jsx';
 import { formatAmount } from '../utils/money.js';
 
-const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', cr_no: '', client_name: '', product_service: '', amount: '', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '' };
+const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', cr_no: '', client_name: '', product_service: '', due_date: '', amount: '', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '' };
 const noFilters = { q: '', dateFrom: '', dateTo: '', client: '', product: '', paymentStatus: '', deliveryStatus: '' };
 const filtersFromParams = (params) => Object.fromEntries(Object.keys(noFilters).map((key) => [key, params.get(key) || '']));
 const splitInvoiceNumber = (invoiceNo = '') => {
@@ -44,7 +44,7 @@ export default function Invoices() {
     try { await api(`/api/invoices/${del.id}`, { method: 'DELETE' }); note('Deleted'); load(); } catch (e) { note(e.message, true); }
     setDel(null);
   };
-  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), amount: formatAmount(r.amount), amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '' }); setErrs({}); };
+  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), amount: formatAmount(r.amount), amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', due_date: r.due_date ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '' }); setErrs({}); };
   const onSort = (k) => setSort({ sortBy: k, sortDir: sort.sortBy === k && sort.sortDir === 'asc' ? 'desc' : 'asc' });
 
   return (

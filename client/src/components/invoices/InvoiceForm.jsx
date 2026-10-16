@@ -2,7 +2,7 @@ import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
 import Modal from '../Modal.jsx';
 
-const FIELDS = [['date_issued', 'Date Issued', 'date'], ['cr_no', 'CR No.'], ['client_name', 'Client Name'], ['delivery_date', 'Delivery Date', 'date']];
+const FIELDS = [['date_issued', 'Date Issued', 'date'], ['cr_no', 'CR No.'], ['client_name', 'Client Name'], ['due_date', 'Due Date', 'date'], ['delivery_date', 'Delivery Date', 'date']];
 const required = new Set(['date_issued', 'invoice_number', 'client_name', 'product_service', 'amount']);
 const lbl = 'block text-sm font-medium text-slate-700';
 const input = 'mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100';
@@ -62,7 +62,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
               </span>
               {error('invoice_no')}
             </label>
-            {FIELDS.slice(1, 3).map(([key, label, type]) => field(key, label, type))}
+            {FIELDS.slice(1, 4).map(([key, label, type]) => field(key, label, type))}
             {productInput}
             {field('delivery_date', 'Delivery Date', 'date')}
           </div>

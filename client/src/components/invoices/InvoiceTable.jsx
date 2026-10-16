@@ -1,7 +1,7 @@
 import { peso } from '../../utils/api.js';
 import StatusBadge from '../StatusBadge.jsx';
 
-const COLS = [['date_issued', 'Date Issued'], ['invoice_no', 'Invoice No.'], ['cr_no', 'CR No.'], ['client_name', 'Client'], ['product_service', 'Product/Service'], ['amount', 'Amount'], ['amount_paid', 'Paid'], [null, 'Outstanding'], ['payment_status', 'Payment'], ['delivery_date', 'Delivery Date'], [null, 'Delivery'], [null, 'Remarks'], [null, '']];
+const COLS = [['date_issued', 'Date Issued'], ['invoice_no', 'Invoice No.'], ['cr_no', 'CR No.'], ['client_name', 'Client'], ['product_service', 'Product/Service'], ['due_date', 'Due Date'], ['amount', 'Amount'], ['amount_paid', 'Paid'], [null, 'Outstanding'], ['payment_status', 'Payment'], ['delivery_date', 'Delivery Date'], [null, 'Delivery'], [null, 'Remarks'], [null, '']];
 
 export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDelete }) {
   const ariaSort = (k) => (sort.sortBy === k ? (sort.sortDir === 'asc' ? 'ascending' : 'descending') : undefined);
@@ -17,11 +17,11 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
           </tr>
         </thead>
         <tbody>
-          {loading ? <tr><td colSpan={13} className="p-8 text-center text-slate-400">Loading…</td></tr>
-            : !rows.length ? <tr><td colSpan={13} className="p-8 text-center text-slate-400">No invoices found</td></tr>
+          {loading ? <tr><td colSpan={14} className="p-8 text-center text-slate-400">Loading…</td></tr>
+            : !rows.length ? <tr><td colSpan={14} className="p-8 text-center text-slate-400">No invoices found</td></tr>
             : rows.map((r) => (
               <tr key={r.id} className="border-t">
-                <td className="px-3 py-2">{r.date_issued}</td><td className="px-3">{r.invoice_no}</td><td className="px-3">{r.cr_no}</td><td className="px-3">{r.client_name}</td><td className="px-3">{r.product_service}</td>
+                <td className="px-3 py-2">{r.date_issued}</td><td className="px-3">{r.invoice_no}</td><td className="px-3">{r.cr_no}</td><td className="px-3">{r.client_name}</td><td className="px-3">{r.product_service}</td><td className="px-3">{r.due_date || '—'}</td>
                 <td className="px-3">{peso(r.amount)}</td><td className="px-3">{peso(r.amount_paid)}</td><td className="px-3">{peso(r.outstanding)}</td>
                 <td className="px-3"><StatusBadge status={r.payment_status} /></td>
                 <td className="px-3">{r.delivery_date}</td><td className="px-3"><StatusBadge status={r.deliveryStatus} /></td>

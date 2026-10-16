@@ -70,6 +70,18 @@ describe('invoices API', () => {
     await DEL(`/api/invoices/${overdue.body.id}`);
     await DEL(`/api/invoices/${incoming.body.id}`);
   });
+  it('persists due dates and classifies receivables without overlap', async () => {
+    const overdue = await POST('/api/invoices', { ...base, invoice_no: 'INV-DUE-OVER', date_issued: '2026-09-01', due_date: '2026-10-15', amount: 200 });
+    const later = await POST('/api/invoices', { ...base, invoice_no: 'INV-DUE-LATER', date_issued: '2026-10-01', due_date: '2026-11-20', amount: 300, client_name: 'B' });
+    expect(overdue.body.due_date).toBe('2026-10-15');
+    const analytics = (await GET('/api/dashboard/analytics?asOf=2026-10-16&dateFrom=2026-10-01&dateTo=2026-10-31')).body;
+    const records = analytics.receivables.categories.flatMap((category) => category.records);
+    expect(records.map((record) => record.invoice_no)).toContain('INV-DUE-OVER');
+    expect(records.map((record) => record.invoice_no)).toContain('INV-DUE-LATER');
+    expect(new Set(records.map((record) => record.invoice_no)).size).toBe(records.length);
+    await DEL(`/api/invoices/${overdue.body.id}`);
+    await DEL(`/api/invoices/${later.body.id}`);
+  });
   it('non-numeric ids and unknown endpoints are 404', async () => {
     expect((await GET('/api/invoices/abc')).status).toBe(404);
     expect((await DEL('/api/invoices/abc')).status).toBe(404);

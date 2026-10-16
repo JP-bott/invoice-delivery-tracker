@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date_issued TEXT NOT NULL,
     invoice_no TEXT NOT NULL COLLATE NOCASE UNIQUE,
-    cr_no TEXT, client_name TEXT NOT NULL, product_service TEXT NOT NULL,
+    cr_no TEXT, client_name TEXT NOT NULL, product_service TEXT NOT NULL, due_date TEXT,
     amount_centavos INTEGER NOT NULL DEFAULT 0 CHECK (amount_centavos >= 0),
     amount_paid_centavos INTEGER NOT NULL DEFAULT 0 CHECK (amount_paid_centavos >= 0 AND amount_paid_centavos <= amount_centavos),
     payment_status TEXT NOT NULL DEFAULT 'Pending' CHECK (payment_status IN ('Pending','Partially Paid','Paid','Cancelled')),

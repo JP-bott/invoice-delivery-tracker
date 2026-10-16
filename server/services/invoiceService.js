@@ -3,11 +3,11 @@ import { toPesos } from './money.js';
 import { buildWhere } from './filterBuilder.js';
 import { HttpError } from '../http.js';
 
-const SORTS = { date_issued: 'date_issued', invoice_no: 'invoice_no', cr_no: 'cr_no', client_name: 'client_name', product_service: 'product_service', amount: 'amount_centavos', amount_paid: 'amount_paid_centavos', payment_status: 'payment_status', delivery_date: 'delivery_date' };
+const SORTS = { date_issued: 'date_issued', invoice_no: 'invoice_no', cr_no: 'cr_no', client_name: 'client_name', product_service: 'product_service', due_date: 'due_date', amount: 'amount_centavos', amount_paid: 'amount_paid_centavos', payment_status: 'payment_status', delivery_date: 'delivery_date' };
 
 export const toApi = (r) => ({
   id: Number(r.id), date_issued: r.date_issued, invoice_no: r.invoice_no, cr_no: r.cr_no,
-  client_name: r.client_name, product_service: r.product_service,
+  client_name: r.client_name, product_service: r.product_service, due_date: r.due_date,
   amount: toPesos(r.amount_centavos), amount_paid: toPesos(r.amount_paid_centavos),
   outstanding: toPesos(Math.max(r.amount_centavos - r.amount_paid_centavos, 0)),
   payment_status: r.payment_status, delivery_date: r.delivery_date,
@@ -29,14 +29,14 @@ export async function get(id) {
   const r = (await getDb().execute({ sql: 'SELECT * FROM invoices WHERE id = ?', args: [id] })).rows[0];
   return r ? toApi(r) : null;
 }
-const cols = (v) => [v.date_issued, v.invoice_no, v.cr_no, v.client_name, v.product_service, v.amount_centavos, v.amount_paid_centavos, v.payment_status, v.delivery_date, v.remarks];
+const cols = (v) => [v.date_issued, v.invoice_no, v.cr_no, v.client_name, v.product_service, v.due_date, v.amount_centavos, v.amount_paid_centavos, v.payment_status, v.delivery_date, v.remarks];
 export async function create(v) {
   const now = new Date().toISOString();
-  const r = await getDb().execute({ sql: `INSERT INTO invoices (date_issued,invoice_no,cr_no,client_name,product_service,amount_centavos,amount_paid_centavos,payment_status,delivery_date,remarks,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, args: [...cols(v), now, now] });
+  const r = await getDb().execute({ sql: `INSERT INTO invoices (date_issued,invoice_no,cr_no,client_name,product_service,due_date,amount_centavos,amount_paid_centavos,payment_status,delivery_date,remarks,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, args: [...cols(v), now, now] });
   return get(Number(r.lastInsertRowid));
 }
 export async function update(id, v) {
-  const r = await getDb().execute({ sql: `UPDATE invoices SET date_issued=?,invoice_no=?,cr_no=?,client_name=?,product_service=?,amount_centavos=?,amount_paid_centavos=?,payment_status=?,delivery_date=?,remarks=?,updated_at=? WHERE id=?`, args: [...cols(v), new Date().toISOString(), id] });
+  const r = await getDb().execute({ sql: `UPDATE invoices SET date_issued=?,invoice_no=?,cr_no=?,client_name=?,product_service=?,due_date=?,amount_centavos=?,amount_paid_centavos=?,payment_status=?,delivery_date=?,remarks=?,updated_at=? WHERE id=?`, args: [...cols(v), new Date().toISOString(), id] });
   return r.rowsAffected ? get(id) : null;
 }
 export async function remove(id) {
