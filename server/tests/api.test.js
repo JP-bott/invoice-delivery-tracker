@@ -3,6 +3,7 @@ import os from 'node:os'; import path from 'node:path'; import fs from 'node:fs'
 import { toCentavos } from '../services/money.js';
 import { validateInvoice } from '../services/validate.js';
 import { range } from '../../client/src/utils/dates.js';
+import { formatAmount } from '../../client/src/utils/money.js';
 
 let handle;
 beforeAll(async () => {
@@ -15,6 +16,13 @@ const base = { date_issued: '2026-10-01', invoice_no: 'INV-001', client_name: 'A
 
 describe('money', () => {
   it('converts safely', () => { expect(toCentavos(1250.75)).toBe(125075); expect(toCentavos('0.1')).toBe(10); });
+  it('formats editable display values on blur', () => {
+    expect(formatAmount('100')).toBe('100.00');
+    expect(formatAmount('1500')).toBe('1,500.00');
+    expect(formatAmount('25000.5')).toBe('25,000.50');
+    expect(formatAmount('1000000')).toBe('1,000,000.00');
+    expect(formatAmount('')).toBe('');
+  });
   it('rejects 3 decimals and float drift', () => { expect(() => toCentavos('1.001')).toThrow(); expect(() => toCentavos(0.1 + 0.2)).toThrow(); });
 });
 describe('validation', () => {
@@ -76,6 +84,25 @@ describe('invoices API', () => {
     expect(r.status).toBe(201);
     expect(r.body.amount).toBe(1500.5);
     expect(r.body.outstanding).toBe(1500.5);
+  });
+  it('keeps dashboard metrics synchronized through invoice lifecycle changes', async () => {
+    const query = 'dateFrom=2026-10-15&dateTo=2026-10-20';
+    const before = (await GET(`/api/dashboard/summary?${query}`)).body;
+    const created = await POST('/api/invoices', { ...base, date_issued: '2026-10-16', invoice_no: 'SVI-SYNC-00123', product_service: 'Sync Service', amount: '1,000.00', amount_paid: 0 });
+    expect(created.status).toBe(201);
+    let summary = (await GET(`/api/dashboard/summary?${query}`)).body;
+    expect(summary.totalInvoices).toBe(before.totalInvoices + 1);
+    expect(summary.totalValue).toBeCloseTo(before.totalValue + 1000);
+    const updated = await PUT(`/api/invoices/${created.body.id}`, { ...base, date_issued: '2026-10-16', invoice_no: 'VI00123', product_service: 'Updated Service', amount: '2,000.00', amount_paid: '2,000.00', payment_status: 'Paid' });
+    expect(updated.status).toBe(200);
+    summary = (await GET(`/api/dashboard/summary?${query}`)).body;
+    expect(summary.totalValue).toBeCloseTo(before.totalValue + 2000);
+    expect(summary.totalCollected).toBeCloseTo(before.totalCollected + 2000);
+    expect((await GET('/api/invoices?q=VI00123&product=Updated%20Service&paymentStatus=Paid')).body.total).toBe(1);
+    expect((await DEL(`/api/invoices/${created.body.id}`)).status).toBe(204);
+    summary = (await GET(`/api/dashboard/summary?${query}`)).body;
+    expect(summary.totalInvoices).toBe(before.totalInvoices);
+    expect(summary.totalValue).toBeCloseTo(before.totalValue);
   });
 });
 describe('product options API', () => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, qs } from '../utils/api.js';
 import { range } from '../utils/dates.js';
 import { PRESETS } from '../utils/constants.js';
@@ -10,6 +11,7 @@ const sel = 'rounded-lg border border-slate-300 px-2 py-1.5 text-sm';
 const ENDPOINTS = ['summary', 'invoice-trends', 'payment-distribution', 'top-clients', 'top-products', 'delivery-summary', 'recent-invoices'];
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [preset, setPreset] = useState('month');
   const [client, setClient] = useState(''), [product, setProduct] = useState('');
   const [opts, setOpts] = useState({ clients: [], products: [] });
@@ -23,6 +25,7 @@ export default function Dashboard() {
       .then(([summary, trends, dist, clients, products, delivery, recent]) => { setD({ summary, trends, dist, clients, products, delivery, recent }); setErr(''); })
       .catch((e) => setErr(e.message)).finally(() => setLoading(false));
   }, [preset, client, product]);
+  const openInvoices = (extra = {}) => navigate(`/invoices?${qs({ ...range(preset), client, product, ...extra })}`);
 
   return (
     <div className="space-y-4">
@@ -35,7 +38,7 @@ export default function Dashboard() {
       </div>
       {err && <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{err}</div>}
       {loading && !d ? <p className="text-slate-500">Loading…</p> : d && (<>
-        <SummaryCards s={d.summary} />
+        <SummaryCards s={d.summary} onOpenInvoices={openInvoices} />
         <div className="grid gap-4 lg:grid-cols-2">
           <TrendChart data={d.trends} /><StatusChart data={d.dist} /><TopClientsChart data={d.clients} /><TopProductsChart data={d.products} />
         </div>
