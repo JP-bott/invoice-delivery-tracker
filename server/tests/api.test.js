@@ -60,6 +60,16 @@ describe('invoices API', () => {
     const s = (await GET('/api/dashboard/summary')).body;
     expect(s.totalInvoices).toBe(1); expect(s.pendingPayments).toBe(1250.75);
   });
+  it('dashboard invoice status groups unpaid invoices by issue date', async () => {
+    const overdue = await POST('/api/invoices', { ...base, invoice_no: 'INV-OVERDUE', date_issued: '2026-09-30', amount: 200, amount_paid: 50, payment_status: 'Partially Paid' });
+    const incoming = await POST('/api/invoices', { ...base, invoice_no: 'INV-INCOMING', date_issued: '2026-11-01', amount: 300 });
+    const status = (await GET('/api/dashboard/invoice-status?dateFrom=2026-10-01&dateTo=2026-10-31')).body;
+    expect(status.buckets.overdue).toEqual({ value: 15000, count: 1 });
+    expect(status.buckets.dueMonth).toEqual({ value: 125075, count: 1 });
+    expect(status.buckets.incoming).toEqual({ value: 30000, count: 1 });
+    await DEL(`/api/invoices/${overdue.body.id}`);
+    await DEL(`/api/invoices/${incoming.body.id}`);
+  });
   it('non-numeric ids and unknown endpoints are 404', async () => {
     expect((await GET('/api/invoices/abc')).status).toBe(404);
     expect((await DEL('/api/invoices/abc')).status).toBe(404);

@@ -5,10 +5,10 @@ import { range } from '../utils/dates.js';
 import { PRESETS } from '../utils/constants.js';
 import SummaryCards from '../components/dashboard/SummaryCards.jsx';
 import RecentTransactions from '../components/dashboard/RecentTransactions.jsx';
-import { StatusChart, TopClientsChart, TopProductsChart, TrendChart } from '../components/dashboard/Charts.jsx';
+import { InvoiceStatusChart, StatusChart, TopClientsChart, TopProductsChart, TrendChart } from '../components/dashboard/Charts.jsx';
 
 const sel = 'rounded-lg border border-slate-300 px-2 py-1.5 text-sm';
-const ENDPOINTS = ['summary', 'invoice-trends', 'payment-distribution', 'top-clients', 'top-products', 'delivery-summary', 'recent-invoices'];
+const ENDPOINTS = ['summary', 'invoice-trends', 'payment-distribution', 'invoice-status', 'top-clients', 'top-products', 'delivery-summary', 'recent-invoices'];
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ export default function Dashboard() {
     const q = qs({ ...range(preset), client, product });
     setLoading(true);
     Promise.all(ENDPOINTS.map((n) => api(`/api/dashboard/${n}?${q}`)))
-      .then(([summary, trends, dist, clients, products, delivery, recent]) => { setD({ summary, trends, dist, clients, products, delivery, recent }); setErr(''); })
+      .then(([summary, trends, dist, status, clients, products, delivery, recent]) => { setD({ summary, trends, dist, status, clients, products, delivery, recent }); setErr(''); })
       .catch((e) => setErr(e.message)).finally(() => setLoading(false));
   }, [preset, client, product]);
   const openInvoices = (extra = {}) => navigate(`/invoices?${qs({ ...range(preset), client, product, ...extra })}`);
@@ -40,7 +40,7 @@ export default function Dashboard() {
       {loading && !d ? <p className="text-slate-500">Loading…</p> : d && (<>
         <SummaryCards s={d.summary} onOpenInvoices={openInvoices} />
         <div className="grid gap-4 lg:grid-cols-2">
-          <TrendChart data={d.trends} /><StatusChart data={d.dist} /><TopClientsChart data={d.clients} /><TopProductsChart data={d.products} />
+          <InvoiceStatusChart data={d.status} onOpenInvoices={openInvoices} /><TrendChart data={d.trends} /><StatusChart data={d.dist} /><TopClientsChart data={d.clients} /><TopProductsChart data={d.products} />
         </div>
         <RecentTransactions data={d.recent} />
       </>)}

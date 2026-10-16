@@ -13,7 +13,8 @@ export function buildWhere(q = {}, { exact = false, excludeCancelled = false } =
     if (exact) { w.push(`${col} = ?`); a.push(q[k].trim()); }
     else { w.push(`${col} LIKE ? ESCAPE '\\'`); a.push(like(q[k].trim())); }
   }
-  if (str(q.paymentStatus)) { w.push('payment_status = ?'); a.push(q.paymentStatus); }
+  if (q.paymentStatus === 'unpaid') w.push("payment_status IN ('Pending','Partially Paid')");
+  else if (str(q.paymentStatus)) { w.push('payment_status = ?'); a.push(q.paymentStatus); }
   if (q.deliveryStatus === 'Pending') w.push('delivery_date IS NULL');
   if (q.deliveryStatus === 'Delivered') w.push('delivery_date IS NOT NULL');
   if (str(q.q)) {
