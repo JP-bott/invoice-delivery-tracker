@@ -1,0 +1,49 @@
+// Framework-free API: handle({ method, path, query, body }) -> { status, body }.
+import { ensureSchema } from './database/db.js';
+import { validateInvoice } from './services/validate.js';
+import * as inv from './services/invoiceService.js';
+import { handlers } from './services/dashboardService.js';
+import { errorResponse, invalid, notFound } from './http.js';
+
+const ok = (body, status = 200) => ({ status, body });
+const idOf = (s) => (/^\d+$/.test(s) ? Number(s) : null);
+
+async function route(method, seg, query, body) {
+  const [, area, a, extra] = seg; // seg[0] === 'api'
+  if (seg[0] !== 'api' || extra !== undefined) return null;
+
+  if (area === 'invoices') {
+    if (a === undefined) {
+      if (method === 'GET') return () => inv.list(query).then(ok);
+      if (method === 'POST') return async () => {
+        const { errors, value } = validateInvoice(body);
+        return Object.keys(errors).length ? invalid(errors) : ok(await inv.create(value), 201);
+      };
+      return null;
+    }
+    const id = idOf(a);
+    if (method === 'GET') return async () => { const r = id == null ? null : await inv.get(id); return r ? ok(r) : notFound(); };
+    if (method === 'PUT') return async () => {
+      const { errors, value } = validateInvoice(body);
+      if (Object.keys(errors).length) return invalid(errors);
+      const r = id == null ? null : await inv.update(id, value);
+      return r ? ok(r) : notFound();
+    };
+    if (method === 'DELETE') return async () => (id != null && await inv.remove(id) ? { status: 204 } : notFound());
+    return null;
+  }
+  if (area === 'dashboard' && method === 'GET' && a && Object.hasOwn(handlers, a)) return () => handlers[a](query).then(ok);
+  if (area === 'filters' && method === 'GET' && a === 'clients') return () => inv.distinct('client_name').then(ok);
+  if (area === 'filters' && method === 'GET' && a === 'products') return () => inv.distinct('product_service').then(ok);
+  return null;
+}
+
+export async function handle({ method = 'GET', path = '/', query = {}, body } = {}) {
+  const seg = path.split('/').filter(Boolean);
+  try {
+    const run = await route(method.toUpperCase(), seg, query, body);
+    if (!run) return notFound('Unknown endpoint');
+    await ensureSchema();
+    return await run();
+  } catch (e) { return errorResponse(e); }
+}
