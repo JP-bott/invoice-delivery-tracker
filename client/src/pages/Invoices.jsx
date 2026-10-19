@@ -6,12 +6,13 @@ import FilterBar from '../components/invoices/FilterBar.jsx';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import Pagination from '../components/invoices/Pagination.jsx';
 import InvoiceForm from '../components/invoices/InvoiceForm.jsx';
+import InvoicePreview from '../components/invoices/InvoicePreview.jsx';
 import DeleteDialog from '../components/invoices/DeleteDialog.jsx';
 import { PageHeader } from '../components/ui.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { formatAmount } from '../utils/money.js';
 
-const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', auto_number: true, cr_no: '', client_name: '', product_service: '', due_date: '', amount: '', vat_type: 'VATable', withholding_rate: '0', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '' };
+const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', cr_no: '', client_name: '', product_service: '', due_date: '', amount: '', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '' };
 const noFilters = { q: '', dateFrom: '', dateTo: '', client: '', product: '', paymentStatus: '', deliveryStatus: '' };
 const filtersFromParams = (params) => Object.fromEntries(Object.keys(noFilters).map((key) => [key, params.get(key) || '']));
 const splitInvoiceNumber = (invoiceNo = '') => {
@@ -26,6 +27,7 @@ export default function Invoices() {
   const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(10), [sort, setSort] = useState({ sortBy: 'date_issued', sortDir: 'desc' });
   const [res, setRes] = useState({ data: [], total: 0 }), [loading, setLoading] = useState(true), [products, setProducts] = useState([]);
   const [form, setForm] = useState(null), [errs, setErrs] = useState({}), [del, setDel] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false), [deleting, setDeleting] = useState(false);
 
   useEffect(() => { const next = filtersFromParams(searchParams); setF(next); setDq(next); setPage(1); }, [searchParams]);
@@ -58,12 +60,8 @@ export default function Invoices() {
     try { await api(`/api/invoices/${del.id}`, { method: 'DELETE' }); toast.success(`Invoice ${del.invoice_no} deleted`); load(); } catch (e) { toast.error(e.message); }
     setDeleting(false); setDel(null);
   };
-  const openAdd = async () => {
-    setForm({ ...blank }); setErrs({});
-    try { const next = await api('/api/invoices/next-number'); setForm((current) => current?.auto_number ? { ...current, ...splitInvoiceNumber(next.invoice_no), invoice_no: next.invoice_no } : current); }
-    catch (e) { toast.error(e.message); }
-  };
-  const openEdit = (r) => { setForm({ ...r, auto_number: false, ...splitInvoiceNumber(r.invoice_no), amount: formatAmount(r.amount), amount_paid: formatAmount(r.amount_paid), vat_type: r.vat_type || 'VATable', withholding_rate: String(r.withholding_rate ?? 0), cr_no: r.cr_no ?? '', due_date: r.due_date ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '' }); setErrs({}); };
+  const openAdd = () => { setForm({ ...blank }); setErrs({}); };
+  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), amount: formatAmount(r.amount), amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', due_date: r.due_date ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '' }); setErrs({}); };
   const onSort = (k) => setSort({ sortBy: k, sortDir: sort.sortBy === k && sort.sortDir === 'asc' ? 'desc' : 'asc' });
   const clearFilters = () => { setF(noFilters); setSearchParams({}); };
   const filtered = Object.keys(noFilters).some((k) => dq[k]);
@@ -74,9 +72,10 @@ export default function Invoices() {
         actions={<button type="button" className="btn btn-primary" onClick={openAdd}><Plus size={16} aria-hidden="true" />Add Invoice</button>} />
       <FilterBar f={f} setF={setF} products={products} onClear={clearFilters} sort={sort}
         onSortField={(k) => setSort({ ...sort, sortBy: k })} onSortDir={() => setSort({ ...sort, sortDir: sort.sortDir === 'asc' ? 'desc' : 'asc' })} />
-      <InvoiceTable rows={res.data} loading={loading} sort={sort} onSort={onSort} onEdit={openEdit} onDelete={setDel} filtered={filtered} onClear={clearFilters} onAdd={openAdd} />
+      <InvoiceTable rows={res.data} loading={loading} sort={sort} onSort={onSort} onEdit={openEdit} onDelete={setDel} onPreview={(r) => setPreview({ ...r, amount: formatAmount(r.amount) })} filtered={filtered} onClear={clearFilters} onAdd={openAdd} />
       <Pagination total={res.total} page={page} pageSize={pageSize} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} />
       {form && <InvoiceForm form={form} setForm={setForm} errs={errs} products={products} saving={saving} onSave={save} onCancel={() => !saving && setForm(null)} />}
+      {preview && <InvoicePreview invoice={preview} onClose={() => setPreview(null)} />}
       {del && <DeleteDialog invoice={del} busy={deleting} onConfirm={confirmDelete} onCancel={() => !deleting && setDel(null)} />}
     </div>
   );

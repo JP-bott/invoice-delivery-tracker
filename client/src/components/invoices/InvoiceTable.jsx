@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, FileSearch, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Eye, FileSearch, Pencil, Trash2 } from 'lucide-react';
 import { peso } from '../../utils/api.js';
 import { today } from '../../utils/dates.js';
 import StatusBadge, { OverdueBadge } from '../StatusBadge.jsx';
@@ -9,12 +9,13 @@ const COUNT = COLS.length;
 const daysLate = (due, now) => Math.round((Date.parse(now) - Date.parse(due)) / 86400000);
 const isOverdue = (r, now) => r.due_date && r.due_date < now && r.outstanding > 0 && ['Pending', 'Partially Paid'].includes(r.payment_status);
 
-const actions = (r, onEdit, onDelete) => [
+const actions = (r, onEdit, onDelete, onPreview) => [
+  { label: 'Preview invoice', icon: Eye, onClick: () => onPreview(r) },
   { label: 'Edit invoice', icon: Pencil, onClick: () => onEdit(r) },
   { label: 'Delete invoice', icon: Trash2, onClick: () => onDelete(r), danger: true },
 ];
 
-export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDelete, filtered, onClear, onAdd }) {
+export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDelete, onPreview, filtered, onClear, onAdd }) {
   const now = today();
   const ariaSort = (k) => (sort.sortBy === k ? (sort.sortDir === 'asc' ? 'ascending' : 'descending') : undefined);
   const empty = !loading && !rows.length;
@@ -56,7 +57,7 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
                   <td className="td num text-fg-muted">{r.delivery_date}</td>
                   <td className="td"><StatusBadge status={r.deliveryStatus === 'Delivered' ? 'Delivered' : 'Pending'} label={r.deliveryStatus} /></td>
                   <td className="td max-w-[10rem] truncate text-fg-muted" title={r.remarks || undefined}>{r.remarks}</td>
-                  <td className="td text-right"><ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete)} /></td>
+                  <td className="td text-right"><ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete, onPreview)} /></td>
                 </tr>))}
           </tbody>
         </table>
@@ -70,7 +71,7 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
             <li key={r.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0"><p className="num font-semibold text-fg">{r.invoice_no}</p><p className="truncate text-sm text-fg-muted">{r.client_name}</p></div>
-                <ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete)} />
+                <ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete, onPreview)} />
               </div>
               <p className="mt-0.5 truncate text-xs text-fg-subtle">{r.product_service}</p>
               <div className="mt-3 flex items-end justify-between gap-3">

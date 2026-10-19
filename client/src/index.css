@@ -246,3 +246,14 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Printing an invoice preview: hide the app and every other dialog, print only the sheet. */
+@media print {
+  body.printing-doc > *:not([data-print-keep]) { display: none !important; }
+  body.printing-doc { overflow: visible !important; background: #fff !important; }
+  [data-print-keep] { position: static !important; display: block !important; background: none !important; backdrop-filter: none !important; padding: 0 !important; animation: none !important; }
+  [data-print-keep] [data-print-dialog] { display: block !important; max-height: none !important; width: auto !important; max-width: none !important; border: 0 !important; background: none !important; box-shadow: none !important; animation: none !important; }
+  [data-print-keep] [data-print-hide] { display: none !important; }
+  [data-print-keep] [data-print-body] { overflow: visible !important; padding: 0 !important; background: none !important; }
+  [data-print-keep] .inv-sheet { zoom: 1 !important; margin: 0 !important; box-shadow: none !important; }
+}

@@ -1,0 +1,41 @@
+/* Printable A5 service-invoice sheet. Always black on white (paper), independent of the app theme. */
+.inv-sheet { --ink: #1a1a1a; --line: #222; --red: #c4161c; width: 148mm; min-height: 210mm; background: #fff; color: var(--ink); padding: 10mm 8mm 8mm; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; margin: 0 auto; box-shadow: 0 2px 12px rgb(0 0 0 / 0.3); text-align: left; }
+.inv-sheet *, .inv-sheet *::before, .inv-sheet *::after { box-sizing: border-box; }
+.inv-sheet header { text-align: center; line-height: 1.25; }
+.inv-sheet header h1 { margin: 0; font-size: 22pt; letter-spacing: 0.5px; font-weight: 800; }
+.inv-sheet header p { margin: 0; font-size: 8pt; }
+.inv-sheet .title-row { display: flex; justify-content: space-between; align-items: flex-end; margin: 10px 0 2px; }
+.inv-sheet .title-row .t { font-size: 9pt; font-weight: 700; }
+.inv-sheet .title-row .t b { font-size: 13pt; }
+.inv-sheet .title-row .no { color: var(--red); font-family: Georgia, serif; font-size: 12pt; font-weight: 700; display: flex; gap: 14px; }
+.inv-sheet table { border-collapse: collapse; width: 100%; }
+.inv-sheet td, .inv-sheet th { border: 1px solid var(--line); padding: 2px 5px; font-size: 8.5pt; color: var(--ink); }
+.inv-sheet .info td { height: 20px; vertical-align: middle; }
+.inv-sheet .info .cell { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.inv-sheet .info .cell .v { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.inv-sheet .info .r { width: 32%; }
+.inv-sheet .items { margin-top: 6px; border: 1.5px solid var(--line); }
+.inv-sheet .items th { font-size: 9pt; font-weight: 800; text-align: center; height: 26px; }
+.inv-sheet .items td { height: 18px; padding: 0 4px; }
+.inv-sheet .items .qty { width: 11%; text-align: center; }
+.inv-sheet .items .unit { width: 15%; text-align: right; }
+.inv-sheet .items .amt { width: 20%; text-align: right; font-variant-numeric: tabular-nums; }
+.inv-sheet .items th.unit { font-size: 7.5pt; line-height: 1; text-align: center; }
+.inv-sheet .items td.unit { font-variant-numeric: tabular-nums; }
+.inv-sheet .items td.d { overflow-wrap: anywhere; }
+.inv-sheet .items td.d.sub { font-size: 7.5pt; color: #444; }
+.inv-sheet .totals { margin-top: -1px; border: 1.5px solid var(--line); border-top: 1px solid var(--line); }
+.inv-sheet .totals td { height: 17.5px; font-size: 8pt; }
+.inv-sheet .totals .lbl { text-align: right; }
+.inv-sheet .totals .val { text-align: right; font-variant-numeric: tabular-nums; }
+.inv-sheet .totals .c1 { width: 18%; }
+.inv-sheet .totals .c2 { width: 22%; }
+.inv-sheet .totals .c3 { width: 40%; }
+.inv-sheet .totals .c4 { width: 20%; }
+.inv-sheet .totals .grand { font-weight: 700; }
+.inv-sheet .note { font-size: 9pt; margin: 3px 0 0; }
+.inv-sheet .note b { font-weight: 800; }
+.inv-sheet .sign { display: flex; justify-content: flex-end; margin-top: 26px; }
+.inv-sheet .sign .box { width: 58%; font-size: 8pt; text-align: center; }
+.inv-sheet .sign .line { display: flex; align-items: flex-end; font-size: 10pt; text-align: left; }
+.inv-sheet .sign .line span.u { flex: 1; border-bottom: 1px solid var(--line); height: 16px; margin-left: 4px; }

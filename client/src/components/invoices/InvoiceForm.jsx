@@ -1,11 +1,10 @@
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { Eye, Loader2 } from 'lucide-react';
 import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
-import { peso } from '../../utils/api.js';
-import { computeInvoiceTotals } from '../../../../shared/invoiceTotals.js';
-import { HoverCard } from '../ui.jsx';
 import Modal from '../Modal.jsx';
+import { HoverCard } from '../ui.jsx';
+import InvoicePreview from './InvoicePreview.jsx';
 
 const required = new Set(['date_issued', 'invoice_number', 'client_name', 'product_service', 'amount']);
 const hiddenPaidStatuses = new Set(['Pending', 'No', 'Cancelled']);
@@ -23,9 +22,7 @@ function Group({ id, title, description, children }) {
 }
 
 export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, products = [], saving = false }) {
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const totals = computeInvoiceTotals({ amount: form.amount, vatType: form.vat_type, withholdingRate: form.withholding_rate });
-  const money = (value) => peso(value);
+  const [preview, setPreview] = useState(false);
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
   const setInvoicePart = (key) => (event) => {
     const value = event.target.value;
@@ -58,8 +55,10 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
 
   return (
     <Modal title={`${form.id ? 'Edit' : 'Add'} invoice`} description={form.id ? `Update ${form.invoice_no || 'this invoice'}.` : 'Record a new invoice and its delivery details.'} onClose={onCancel} width="max-w-2xl" dismissOnBackdrop={false}
-      headerActions={<HoverCard content={previewOpen ? 'Hide invoice preview' : 'Show invoice preview'}><button type="button" className="btn btn-ghost btn-icon -mr-2 -mt-1.5" onClick={() => setPreviewOpen((open) => !open)} aria-label={previewOpen ? 'Hide invoice preview' : 'Show invoice preview'} aria-expanded={previewOpen}>{previewOpen ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button></HoverCard>}
       footer={<>
+        <HoverCard content="Preview invoice" width="w-auto">
+          <button type="button" className="btn btn-secondary btn-icon" onClick={() => setPreview(true)} aria-label="Preview invoice" aria-haspopup="dialog"><Eye size={17} aria-hidden="true" /></button>
+        </HoverCard>
         <p className="mr-auto hidden text-xs text-fg-muted sm:block"><span className="text-danger">*</span> Required</p>
         <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
         <button type="submit" form="invoice-form" className="btn btn-primary min-w-32" disabled={saving}>{saving && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add invoice'}</button>
@@ -70,10 +69,10 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
           <div className="label">
             <label htmlFor="invoice_number" className="mb-1.5 block">Invoice No.{star('invoice_number')}</label>
             <span className="flex">
-              <select aria-label="Invoice number prefix" disabled={form.auto_number} className="input !w-auto rounded-r-none border-r-0 bg-surface-2 font-medium" value={form.invoice_prefix} onChange={setInvoicePart('invoice_prefix')}>
+              <select aria-label="Invoice number prefix" className="input !w-auto rounded-r-none border-r-0 bg-surface-2 font-medium" value={form.invoice_prefix} onChange={setInvoicePart('invoice_prefix')}>
                 <option value="SVI">SVI</option><option value="VI">VI</option>
               </select>
-              <input id="invoice_number" type="text" required={!form.auto_number} readOnly={form.auto_number} aria-invalid={Boolean(errs.invoice_no)} aria-describedby={errs.invoice_no ? 'invoice-invoice_no-error' : undefined} className={`${cls('invoice_no')} num rounded-l-none`} value={form.invoice_number || (form.auto_number ? 'Loading…' : '')} onChange={setInvoicePart('invoice_number')} />
+              <input id="invoice_number" type="text" required aria-invalid={Boolean(errs.invoice_no)} aria-describedby={errs.invoice_no ? 'invoice-invoice_no-error' : undefined} className={`${cls('invoice_no')} num rounded-l-none`} value={form.invoice_number} onChange={setInvoicePart('invoice_number')} />
             </span>
             {error('invoice_no')}
           </div>
@@ -95,11 +94,6 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
         </Group>
         <Group id="payment-heading" title="Payment" description="Amount billed, received and current payment state.">
           {amountField('amount', 'Invoice Amount', true)}
-          <label className="label" htmlFor="invoice-vat_type">
-            <span className="mb-1.5 block">VAT Type</span>
-            <select id="invoice-vat_type" className="input" value={form.vat_type} onChange={set('vat_type')}><option>VATable</option><option>VAT-Exempt</option><option>Zero-Rated</option></select>
-          </label>
-          {field('withholding_rate', 'Withholding Tax Rate (%)', 'number', { min: 0, max: 100, step: '0.01', placeholder: '0' })}
           <label className="label" htmlFor="invoice-payment_status">
             <span className="mb-1.5 block">Payment Status</span>
             <select id="invoice-payment_status" {...aria('payment_status')} className={cls('payment_status')} value={form.payment_status} onChange={set('payment_status')}>{STATUSES.map((status) => <option key={status}>{status}</option>)}</select>
@@ -115,24 +109,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
           <textarea id="invoice-remarks" rows="3" className="input resize-y" value={form.remarks} onChange={set('remarks')} placeholder="Add delivery notes or payment details" />
         </label>
       </form>
-      {previewOpen && <section aria-label="Invoice preview" className="anim-fade overflow-hidden rounded-lg border border-line bg-surface">
-        <div className="border-b border-line px-4 py-3 text-center">
-          <h3 className="text-sm font-bold tracking-wide text-fg">SERVICE INVOICE</h3>
-          <p className="mt-0.5 text-xs font-semibold text-danger-ink">No. {form.invoice_no || 'Loading…'}</p>
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-left text-xs text-fg-muted">
-            <span>Billed to: <strong className="font-medium text-fg">{form.client_name || '—'}</strong></span><span>Date: <strong className="font-medium text-fg">{form.date_issued || '—'}</strong></span>
-            <span>Terms: <strong className="font-medium text-fg">{form.due_date || '—'}</strong></span><span>P.O. No.: <strong className="font-medium text-fg">{form.cr_no || '—'}</strong></span>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 divide-y divide-line text-xs sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <div className="divide-y divide-line sm:border-r sm:border-line">
-            {[['VATable Sales', totals.vatableSales], ['VAT-Exempt Sales', totals.vatExemptSales], ['Zero Rated Sales', totals.zeroRatedSales], ['VAT-Amount', totals.vatAmount]].map(([label, value]) => <div key={label} className="flex justify-between gap-3 px-4 py-2"><span>{label}</span><strong className="num font-medium">{money(value)}</strong></div>)}
-          </div>
-          <div className="divide-y divide-line">
-            {[['Total Sales (Vat Inclusive)', totals.totalSales], ['Less: VAT', totals.vat], ['Amount: Net of VAT', totals.netOfVat], ['Amount Due', totals.amountDue], ['Add: VAT', totals.addVat], ['Less: Withholding Tax', totals.withholdingTax], ['Total Amount Due', totals.totalAmountDue]].map(([label, value]) => <div key={label} className="flex justify-between gap-3 px-4 py-2 text-right"><span>{label}</span><strong className="num font-medium">{money(value)}</strong></div>)}
-          </div>
-        </div>
-      </section>}
+      {preview && <InvoicePreview invoice={form} onClose={() => setPreview(false)} />}
     </Modal>
   );
 }

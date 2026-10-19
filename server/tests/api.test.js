@@ -4,7 +4,6 @@ import { toCentavos } from '../services/money.js';
 import { validateInvoice } from '../services/validate.js';
 import { range } from '../../client/src/utils/dates.js';
 import { formatAmount } from '../../client/src/utils/money.js';
-import { computeInvoiceTotals } from '../../shared/invoiceTotals.js';
 
 let handle;
 beforeAll(async () => {
@@ -25,18 +24,6 @@ describe('money', () => {
     expect(formatAmount('')).toBe('');
   });
   it('rejects 3 decimals and float drift', () => { expect(() => toCentavos('1.001')).toThrow(); expect(() => toCentavos(0.1 + 0.2)).toThrow(); });
-});
-describe('invoice totals', () => {
-  it('calculates VAT-inclusive totals in centavos', () => {
-    expect(computeInvoiceTotals({ amount: '1,120.00' })).toMatchObject({ netOfVat: 1000, vat: 120, totalAmountDue: 1120 });
-    expect(computeInvoiceTotals({ amount: 100 })).toMatchObject({ netOfVat: 89.29, vat: 10.71 });
-  });
-  it('supports exempt, zero-rated, withholding, zero and invalid values', () => {
-    expect(computeInvoiceTotals({ amount: 100, vatType: 'VAT-Exempt' })).toMatchObject({ vat: 0, vatExemptSales: 100, totalAmountDue: 100 });
-    expect(computeInvoiceTotals({ amount: 100, vatType: 'Zero-Rated', withholdingRate: 5 })).toMatchObject({ vat: 0, zeroRatedSales: 100, withholdingTax: 5, totalAmountDue: 95 });
-    expect(computeInvoiceTotals({ amount: 0 })).toMatchObject({ totalSales: 0, totalAmountDue: 0 });
-    expect(computeInvoiceTotals({ amount: 'not-a-number' })).toMatchObject({ totalSales: 0, totalAmountDue: 0 });
-  });
 });
 describe('validation', () => {
   const v = (o) => validateInvoice({ ...base, ...o }).errors;
@@ -119,14 +106,6 @@ describe('invoices API', () => {
     expect(r.status).toBe(201);
     expect(r.body.amount).toBe(1500.5);
     expect(r.body.outstanding).toBe(1500.5);
-  });
-  it('generates sequential numbers and stores invoice totals', async () => {
-    const next = await GET('/api/invoices/next-number');
-    const created = await POST('/api/invoices', { ...base, auto_number: true, invoice_no: '', amount: '1,120.00', vat_type: 'VATable', withholding_rate: 5 });
-    expect(created.status).toBe(201);
-    expect(created.body.invoice_no).toBe(next.body.invoice_no);
-    expect(created.body).toMatchObject({ total_sales: 1120, vat: 120, net_of_vat: 1000, withholding_tax: 50, total_amount_due: 1070, vat_type: 'VATable', withholding_rate: 5 });
-    expect((await GET('/api/invoices/next-number')).body.invoice_no).not.toBe(next.body.invoice_no);
   });
   it('keeps dashboard metrics synchronized through invoice lifecycle changes', async () => {
     const query = 'dateFrom=2026-10-15&dateTo=2026-10-20';

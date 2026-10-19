@@ -69,6 +69,9 @@ Money is integer centavos; status / amount-paid rules are enforced server-side; 
 - "Add Invoice" in the sidebar/top bar opens the form via `/invoices?new=1`.
 - Invoice rows show a derived "Overdue" tag (unpaid, due date before today, Asia/Manila). It is a display hint, separate from the stored payment status.
 
+## Invoice preview
+An eye button in the Add/Edit Invoice form (and "Preview invoice" in each row's action menu) opens a print-ready Quandatics service invoice (A5) built from the form values, before anything is saved. Total Sales is the invoice amount treated as VAT-inclusive; the Sale type (VATable 12% / VAT-Exempt / Zero Rated) and Withholding tax selectors only affect the preview and are not stored. Address, TIN and P.O. No. are not part of the data model, so they print blank. Print uses the browser dialog and produces a single A5 page (`client/src/components/invoices/InvoicePreview.jsx`, `invoice-sheet.css`).
+
 ## Not implemented (also absent from the original source)
 Settings page and runtime Turso switching, demo login, CSV export, Top Products value/count toggle, Delivery Overview chart, row-click details on the recent list.
 

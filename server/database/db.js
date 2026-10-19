@@ -24,18 +24,6 @@ export async function initSchema(c = getDb()) {
   await c.batch(SCHEMA_STATEMENTS, 'write');
   const columns = await c.execute('PRAGMA table_info(invoices)');
   if (!columns.rows.some((column) => column.name === 'due_date')) await c.execute('ALTER TABLE invoices ADD COLUMN due_date TEXT');
-  const invoiceColumns = new Map(columns.rows.map((column) => [column.name, column]));
-  const additions = [
-    ['total_sales_centavos', 'INTEGER NOT NULL DEFAULT 0'],
-    ['vat_centavos', 'INTEGER NOT NULL DEFAULT 0'],
-    ['net_of_vat_centavos', 'INTEGER NOT NULL DEFAULT 0'],
-    ['withholding_centavos', 'INTEGER NOT NULL DEFAULT 0'],
-    ['total_amount_due_centavos', 'INTEGER NOT NULL DEFAULT 0'],
-    ['vat_type', "TEXT NOT NULL DEFAULT 'VATable'"],
-    ['withholding_rate_basis_points', 'INTEGER NOT NULL DEFAULT 0'],
-  ];
-  for (const [name, definition] of additions) if (!invoiceColumns.has(name)) await c.execute(`ALTER TABLE invoices ADD COLUMN ${name} ${definition}`);
-  await c.execute(`UPDATE invoices SET total_sales_centavos = amount_centavos, net_of_vat_centavos = amount_centavos, total_amount_due_centavos = amount_centavos WHERE total_sales_centavos = 0 AND amount_centavos > 0`);
   const marker = (await c.execute({ sql: 'SELECT value FROM schema_meta WHERE key = ?', args: ['product_options_seeded'] })).rows[0];
   if (!marker) {
     const now = new Date().toISOString();
