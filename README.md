@@ -66,7 +66,7 @@ Money is integer centavos; status / amount-paid rules are enforced server-side; 
 - The old "Invoice pulse" card was removed from the dashboard: it bucketed unpaid invoices by *issue* date, which conflicted with the due-date based Outstanding Receivables chart. The `/api/dashboard/invoice-status` endpoint is unchanged.
 - Dashboard KPI cards for Outstanding Balance and Pending Payments now open the unpaid invoice list; the invoice list's Payment filter gained an "Unpaid" option so that link shows the right value.
 - Fixed: collapse/expand of client groups in the analytics dialog, and numeric sorting by amount in that dialog.
-- "Add Invoice" in the sidebar/top bar opens the form via `/invoices?new=1`.
+- "Add Invoice" is available on the Invoices page and can also open the form via `/invoices?new=1`.
 - Invoice rows show a derived "Overdue" tag (unpaid, due date before today, Asia/Manila). It is a display hint, separate from the stored payment status.
 
 ## Invoice preview

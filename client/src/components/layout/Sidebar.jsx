@@ -1,10 +1,9 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PanelLeftClose, PanelLeftOpen, PlusCircle, Receipt, ReceiptText, Settings as SettingsIcon, X } from 'lucide-react';
+import { LayoutDashboard, PanelLeftClose, PanelLeftOpen, Receipt, ReceiptText, Settings as SettingsIcon, X } from 'lucide-react';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/invoices', label: 'Invoices', icon: Receipt, end: true },
-  { to: '/invoices?new=1', label: 'Add Invoice', icon: PlusCircle, match: false },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 

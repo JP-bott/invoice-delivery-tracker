@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu, Moon, Plus, Search, Sun } from 'lucide-react';
+import { Menu, Moon, Search, Sun } from 'lucide-react';
 import { today } from '../../utils/dates.js';
 
 const TITLES = { '/': 'Dashboard', '/invoices': 'Invoices', '/settings': 'Settings' };
@@ -29,7 +29,6 @@ export default function Topbar({ theme, onToggleTheme, onOpenMenu }) {
       <button type="button" className="btn btn-ghost btn-icon" onClick={onToggleTheme} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
         {theme === 'dark' ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
       </button>
-      <button type="button" className="btn btn-primary hidden sm:inline-flex" onClick={() => navigate('/invoices?new=1')}><Plus size={16} aria-hidden="true" />Add Invoice</button>
     </header>
   );
 }

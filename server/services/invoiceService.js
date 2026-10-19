@@ -29,6 +29,17 @@ export async function get(id) {
   const r = (await getDb().execute({ sql: 'SELECT * FROM invoices WHERE id = ?', args: [id] })).rows[0];
   return r ? toApi(r) : null;
 }
+export async function nextNumber(prefix) {
+  const rows = (await getDb().execute({
+    sql: 'SELECT invoice_no FROM invoices WHERE invoice_no LIKE ?',
+    args: [`${prefix}%`],
+  })).rows;
+  const max = rows.reduce((highest, row) => {
+    const match = String(row.invoice_no).match(/(\d+)$/);
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  return String(max + 1).padStart(4, '0');
+}
 const cols = (v) => [v.date_issued, v.invoice_no, v.cr_no, v.client_name, v.product_service, v.due_date, v.amount_centavos, v.amount_paid_centavos, v.payment_status, v.delivery_date, v.remarks];
 export async function create(v) {
   const now = new Date().toISOString();
