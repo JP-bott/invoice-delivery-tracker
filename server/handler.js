@@ -36,6 +36,7 @@ async function route(method, seg, query, body) {
       };
       return null;
     }
+    if (a === 'next-number' && method === 'GET') return () => inv.nextInvoiceNumber().then((invoice_no) => ok({ invoice_no }));
     const id = idOf(a);
     if (method === 'GET') return async () => { const r = id == null ? null : await inv.get(id); return r ? ok(r) : notFound(); };
     if (method === 'PUT') return async () => {

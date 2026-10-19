@@ -1,4 +1,5 @@
 import { toCentavos } from './money.js';
+import { VAT_TYPES } from '../../shared/invoiceTotals.js';
 export const STATUSES = ['Pending', 'Partially Paid', 'Paid', 'Cancelled'];
 const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
 
@@ -10,7 +11,7 @@ export function validateInvoice(b = {}) {
     payment_status: b.payment_status, delivery_date: t(b.delivery_date) || null, remarks: t(b.remarks) || null,
   };
   if (!dateOk(v.date_issued)) e.date_issued = 'Valid date required';
-  if (!v.invoice_no) e.invoice_no = 'Required';
+  if (!v.invoice_no && !b.auto_number) e.invoice_no = 'Required';
   if (!v.client_name) e.client_name = 'Required';
   if (!v.product_service) e.product_service = 'Required';
   if (v.due_date && !dateOk(v.due_date)) e.due_date = 'Invalid date';
@@ -30,6 +31,13 @@ export function validateInvoice(b = {}) {
     if (!dateOk(v.delivery_date)) e.delivery_date = 'Invalid date';
     else if (v.delivery_date < v.date_issued) e.delivery_date = 'Cannot be earlier than Date Issued';
   }
+  if (!VAT_TYPES.includes(b.vat_type || 'VATable')) e.vat_type = 'Invalid VAT type';
+  let withholdingRate = Number(String(b.withholding_rate ?? 0).replace(/,/g, '').trim());
+  if (!Number.isFinite(withholdingRate) || withholdingRate < 0 || withholdingRate > 100) e.withholding_rate = 'Must be between 0 and 100';
+  if (!e.withholding_rate) withholdingRate = Math.round(withholdingRate * 100) / 100;
   v.amount_centavos = amt; v.amount_paid_centavos = paid;
+  v.auto_number = Boolean(b.auto_number);
+  v.vat_type = VAT_TYPES.includes(b.vat_type) ? b.vat_type : 'VATable';
+  v.withholding_rate_basis_points = Math.round((withholdingRate || 0) * 100);
   return { errors: e, value: v };
 }

@@ -11,7 +11,7 @@ import { PageHeader } from '../components/ui.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { formatAmount } from '../utils/money.js';
 
-const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', cr_no: '', client_name: '', product_service: '', due_date: '', amount: '', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '' };
+const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', auto_number: true, cr_no: '', client_name: '', product_service: '', due_date: '', amount: '', vat_type: 'VATable', withholding_rate: '0', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '' };
 const noFilters = { q: '', dateFrom: '', dateTo: '', client: '', product: '', paymentStatus: '', deliveryStatus: '' };
 const filtersFromParams = (params) => Object.fromEntries(Object.keys(noFilters).map((key) => [key, params.get(key) || '']));
 const splitInvoiceNumber = (invoiceNo = '') => {
@@ -58,8 +58,12 @@ export default function Invoices() {
     try { await api(`/api/invoices/${del.id}`, { method: 'DELETE' }); toast.success(`Invoice ${del.invoice_no} deleted`); load(); } catch (e) { toast.error(e.message); }
     setDeleting(false); setDel(null);
   };
-  const openAdd = () => { setForm({ ...blank }); setErrs({}); };
-  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), amount: formatAmount(r.amount), amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', due_date: r.due_date ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '' }); setErrs({}); };
+  const openAdd = async () => {
+    setForm({ ...blank }); setErrs({});
+    try { const next = await api('/api/invoices/next-number'); setForm((current) => current?.auto_number ? { ...current, ...splitInvoiceNumber(next.invoice_no), invoice_no: next.invoice_no } : current); }
+    catch (e) { toast.error(e.message); }
+  };
+  const openEdit = (r) => { setForm({ ...r, auto_number: false, ...splitInvoiceNumber(r.invoice_no), amount: formatAmount(r.amount), amount_paid: formatAmount(r.amount_paid), vat_type: r.vat_type || 'VATable', withholding_rate: String(r.withholding_rate ?? 0), cr_no: r.cr_no ?? '', due_date: r.due_date ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '' }); setErrs({}); };
   const onSort = (k) => setSort({ sortBy: k, sortDir: sort.sortBy === k && sort.sortDir === 'asc' ? 'desc' : 'asc' });
   const clearFilters = () => { setF(noFilters); setSearchParams({}); };
   const filtered = Object.keys(noFilters).some((k) => dq[k]);

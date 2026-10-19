@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 // Accessible dialog: focus moves in, Tab is trapped, Escape closes, focus returns to the trigger, page scroll is locked.
-export default function Modal({ title, description, onClose, children, footer, width = 'max-w-lg', dismissOnBackdrop = true }) {
+export default function Modal({ title, description, onClose, children, footer, width = 'max-w-lg', dismissOnBackdrop = true, headerActions }) {
   const id = useId();
   const box = useRef(null);
   const close = useRef(onClose);
@@ -42,6 +42,7 @@ export default function Modal({ title, description, onClose, children, footer, w
             <h2 id={id} className="text-base font-semibold text-fg">{title}</h2>
             {description && <p id={`${id}-d`} className="mt-0.5 text-sm text-fg-muted">{description}</p>}
           </div>
+          {headerActions}
           <button type="button" className="btn btn-ghost btn-icon -mr-2 -mt-1.5" onClick={() => close.current()} aria-label="Close dialog"><X size={18} /></button>
         </header>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">{children}</div>
