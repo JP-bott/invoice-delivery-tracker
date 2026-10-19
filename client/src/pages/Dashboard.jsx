@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, X } from 'lucide-react';
+import { Plus, RefreshCw, X } from 'lucide-react';
 import { api, qs } from '../utils/api.js';
 import { range } from '../utils/dates.js';
 import { PRESETS } from '../utils/constants.js';
@@ -56,6 +56,7 @@ export default function Dashboard() {
       <PageHeader title="Dashboard" description={`Financial overview · ${label}${client ? ` · ${client}` : ''}${product ? ` · ${product}` : ''}`}
         actions={<>
           <button type="button" className="btn btn-secondary" onClick={() => setTick((t) => t + 1)} disabled={loading} aria-label="Refresh data"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} aria-hidden="true" /><span className="hidden sm:inline">Refresh</span></button>
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/invoices?new=1')}><Plus size={16} aria-hidden="true" />Add Invoice</button>
         </>} />
 
       <div role="group" aria-label="Dashboard filters" className="mb-5 flex flex-wrap items-center gap-2">

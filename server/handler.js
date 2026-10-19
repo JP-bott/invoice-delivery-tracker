@@ -36,11 +36,6 @@ async function route(method, seg, query, body) {
       };
       return null;
     }
-    if (a === 'next-number' && method === 'GET') {
-      const prefix = String(query.prefix || '').toUpperCase();
-      if (!['SVI', 'SI', 'VI'].includes(prefix)) return () => Promise.resolve(invalid({ prefix: 'Invalid invoice prefix' }));
-      return () => inv.nextNumber(prefix).then((number) => ok({ prefix, number, invoice_no: `${prefix}${number}` }));
-    }
     const id = idOf(a);
     if (method === 'GET') return async () => { const r = id == null ? null : await inv.get(id); return r ? ok(r) : notFound(); };
     if (method === 'PUT') return async () => {

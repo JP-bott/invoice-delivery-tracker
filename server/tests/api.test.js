@@ -50,14 +50,6 @@ describe('invoices API', () => {
   it('validation errors are 422 with fields', async () => {
     const r = await POST('/api/invoices', { ...base, invoice_no: '' }); expect(r.status).toBe(422); expect(r.body.error.fields.invoice_no).toBeTruthy();
   });
-  it('generates the next padded number per invoice prefix', async () => {
-    expect((await GET('/api/invoices/next-number?prefix=SI')).body).toEqual({ prefix: 'SI', number: '0001', invoice_no: 'SI0001' });
-    const created = await POST('/api/invoices', { ...base, invoice_no: 'SI0001' });
-    expect(created.status).toBe(201);
-    expect((await GET('/api/invoices/next-number?prefix=SI')).body.number).toBe('0002');
-    await DEL(`/api/invoices/${created.body.id}`);
-    expect((await GET('/api/invoices/next-number?prefix=SI')).body.number).toBe('0001');
-  });
   it('list filters, whitelist, wildcard escape', async () => {
     expect((await GET('/api/invoices?sortBy=amount;DROP')).status).toBe(400);
     expect((await GET('/api/invoices?sortBy=constructor')).status).toBe(400);

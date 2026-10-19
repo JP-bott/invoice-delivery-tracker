@@ -1,7 +1,10 @@
-import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Eye, Loader2 } from 'lucide-react';
 import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
 import Modal from '../Modal.jsx';
+import { HoverCard } from '../ui.jsx';
+import InvoicePreview from './InvoicePreview.jsx';
 
 const required = new Set(['date_issued', 'invoice_number', 'client_name', 'product_service', 'amount']);
 const hiddenPaidStatuses = new Set(['Pending', 'No', 'Cancelled']);
@@ -19,6 +22,7 @@ function Group({ id, title, description, children }) {
 }
 
 export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, products = [], saving = false }) {
+  const [preview, setPreview] = useState(false);
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
   const setInvoicePart = (key) => (event) => {
     const value = event.target.value;
@@ -52,6 +56,9 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   return (
     <Modal title={`${form.id ? 'Edit' : 'Add'} invoice`} description={form.id ? `Update ${form.invoice_no || 'this invoice'}.` : 'Record a new invoice and its delivery details.'} onClose={onCancel} width="max-w-2xl" dismissOnBackdrop={false}
       footer={<>
+        <HoverCard content="Preview invoice" width="w-auto">
+          <button type="button" className="btn btn-secondary btn-icon" onClick={() => setPreview(true)} aria-label="Preview invoice" aria-haspopup="dialog"><Eye size={17} aria-hidden="true" /></button>
+        </HoverCard>
         <p className="mr-auto hidden text-xs text-fg-muted sm:block"><span className="text-danger">*</span> Required</p>
         <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
         <button type="submit" form="invoice-form" className="btn btn-primary min-w-32" disabled={saving}>{saving && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add invoice'}</button>
@@ -63,9 +70,9 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             <label htmlFor="invoice_number" className="mb-1.5 block">Invoice No.{star('invoice_number')}</label>
             <span className="flex">
               <select aria-label="Invoice number prefix" className="input !w-auto rounded-r-none border-r-0 bg-surface-2 font-medium" value={form.invoice_prefix} onChange={setInvoicePart('invoice_prefix')}>
-                <option value="SVI">SVI</option><option value="SI">SI</option><option value="VI">VI</option>
+                <option value="SVI">SVI</option><option value="VI">VI</option>
               </select>
-              <input id="invoice_number" type="text" required readOnly={!form.id} aria-invalid={Boolean(errs.invoice_no)} aria-describedby={errs.invoice_no ? 'invoice-invoice_no-error' : undefined} className={`${cls('invoice_no')} num rounded-l-none ${!form.id ? 'cursor-default bg-surface-2' : ''}`} value={form.invoice_number} onChange={setInvoicePart('invoice_number')} />
+              <input id="invoice_number" type="text" required aria-invalid={Boolean(errs.invoice_no)} aria-describedby={errs.invoice_no ? 'invoice-invoice_no-error' : undefined} className={`${cls('invoice_no')} num rounded-l-none`} value={form.invoice_number} onChange={setInvoicePart('invoice_number')} />
             </span>
             {error('invoice_no')}
           </div>
@@ -102,6 +109,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
           <textarea id="invoice-remarks" rows="3" className="input resize-y" value={form.remarks} onChange={set('remarks')} placeholder="Add delivery notes or payment details" />
         </label>
       </form>
+      {preview && <InvoicePreview invoice={form} onClose={() => setPreview(false)} />}
     </Modal>
   );
 }
