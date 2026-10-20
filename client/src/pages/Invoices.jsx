@@ -30,7 +30,7 @@ export default function Invoices() {
   const [saving, setSaving] = useState(false), [deleting, setDeleting] = useState(false);
 
   useEffect(() => { const next = filtersFromParams(searchParams); setF(next); setDq(next); setPage(1); }, [searchParams]);
-  // "Add Invoice" in the sidebar/topbar links here with ?new=1: open the form once and tidy the URL.
+  // Preserve direct ?new=1 links by opening the form once and tidying the URL.
   useEffect(() => {
     if (!searchParams.get('new')) return;
     setForm({ ...blank }); setErrs({});
