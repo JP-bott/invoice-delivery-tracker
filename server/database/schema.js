@@ -60,6 +60,11 @@ export const ITEM_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id, position)`,
 ];
 
+// Line-item pricing (migrations/004_invoice_item_pricing.sql mirrors this). Added to invoice_items with ALTER TABLE ADD COLUMN
+// (initSchema skips any that exist), so the 003 table and its rows are untouched. NULL means the item was saved before unit
+// costs existed: those invoices keep their stored amount and are read as before.
+export const ITEM_PRICING_COLUMNS = ['unit_cost_centavos', 'amount_centavos'];
+
 export const INVOICE_COLUMNS = [
   'id', 'date_issued', 'invoice_no', 'cr_no', 'client_name', 'product_service', 'due_date',
   'amount_centavos', 'amount_paid_centavos', 'payment_status', 'delivery_date', 'remarks', 'created_at', 'updated_at',

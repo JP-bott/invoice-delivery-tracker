@@ -13,7 +13,8 @@ const idOf = (s) => (/^\d+$/.test(s) ? Number(s) : null);
 
 // Built-in field validation plus the active custom fields (existing values let an unchanged legacy value stay valid).
 async function checked(body, id) {
-  const { errors, value } = validateInvoice(body);
+  const current = id == null ? null : await inv.get(id); // an unchanged stored invoice number (even an older format) is kept as is
+  const { errors, value } = validateInvoice(body, { existingInvoiceNo: current?.invoice_no });
   const [fields, existing] = await Promise.all([cf.activeFields(), id == null ? {} : cf.valuesFor(id)]);
   const custom = cf.validateValues(body?.custom_fields, fields, existing);
   return { errors: { ...errors, ...custom.errors }, value, writes: custom.writes };

@@ -15,7 +15,7 @@ beforeAll(async () => {
 });
 const call = (method, url, body) => { const u = new URL(url, 'http://x'); return handle({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body }); };
 const GET = (u) => call('GET', u); const POST = (u, b) => call('POST', u, b); const PUT = (u, b) => call('PUT', u, b); const DEL = (u) => call('DELETE', u);
-const base = { date_issued: '2026-10-01', client_name: 'A', product_service: 'P', amount: 100, payment_status: 'Pending', amount_paid: 0 };
+const base = { invoice_prefix: 'SVI', date_issued: '2026-10-01', client_name: 'A', product_service: 'P', amount: 100, payment_status: 'Pending', amount_paid: 0 };
 let n = 0; const inv = (extra = {}) => ({ ...base, invoice_no: `CF-${++n}`, ...extra });
 // Archive every active field (what a user with no custom fields configured sees).
 const clearFields = async () => { for (const f of (await GET('/api/invoice-fields')).body) await DEL(`/api/invoice-fields/${f.id}`); };

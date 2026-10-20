@@ -3,16 +3,20 @@ import { Eye, Loader2, Plus, Trash2 } from 'lucide-react';
 import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
 import { valueOf } from '../../utils/customFields.js';
-import { MAX_ITEMS, blankItem } from '../../utils/items.js';
+import { MAX_ITEMS, blankItem, sanitizeDecimal } from '../../utils/items.js';
+import { priceItems } from '../../../../shared/pricing.js';
+import { invoiceNoFor } from '../../utils/invoiceNo.js';
 import Modal from '../Modal.jsx';
 import { HoverCard } from '../ui.jsx';
 import InvoicePreview from './InvoicePreview.jsx';
 
-const required = new Set(['date_issued', 'invoice_number', 'client_name', 'amount']);
+const required = new Set(['date_issued', 'invoice_number', 'client_name']);
+const PREFIXES = ['SVI', 'SI'];
 const hiddenPaidStatuses = new Set(['Pending', 'No', 'Cancelled']);
 
 const numericAmount = (value) => Number(String(value ?? '').replace(/,/g, ''));
-const hint = (form) => { const a = numericAmount(form.amount), p = numericAmount(form.amount_paid); return p === 0 ? 'Pending' : p >= a ? 'Paid' : 'Partially Paid'; };
+const hint = (total, paid) => { const p = numericAmount(paid); return p === 0 ? 'Pending' : p >= total ? 'Paid' : 'Partially Paid'; };
+const money = (centavos) => formatAmount(centavos / 100);
 
 function Group({ id, title, description, children }) {
   return (
@@ -26,12 +30,8 @@ function Group({ id, title, description, children }) {
 export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, products = [], fields = [], saving = false }) {
   const [preview, setPreview] = useState(false);
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
-  const setInvoicePart = (key) => (event) => {
-    const value = event.target.value;
-    const prefix = key === 'invoice_prefix' ? value : form.invoice_prefix;
-    const number = key === 'invoice_number' ? value : form.invoice_number;
-    setForm({ ...form, [key]: value, invoice_no: `${prefix}${number}` });
-  };
+  const setInvoicePart = (key) => (event) => setForm({ ...form, [key]: event.target.value });
+  const invoiceNo = invoiceNoFor(form); // { value } | { error }: what would be saved (shown as a hint and in the preview)
   const error = (key) => errs[key] && <span id={`invoice-${key}-error`} role="alert" className="mt-1 block text-xs font-normal text-danger-ink">{errs[key]}</span>;
   const star = (key) => required.has(key) ? <span className="ml-0.5 text-danger" aria-hidden="true">*</span> : <span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span>;
   const setCustom = (id, value) => setForm({ ...form, custom_fields: { ...(form.custom_fields || {}), [id]: value } });
@@ -42,6 +42,8 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   const setItem = (i, patch) => setItems(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
   const addItem = () => { const at = items.length; setItems([...items, blankItem()]); requestAnimationFrame(() => document.getElementById(`invoice-item-${at}-product`)?.focus()); };
   const removeItem = (i) => setItems(items.filter((_, j) => j !== i));
+  const priced = priceItems(items);
+  const total = priced.lines.reduce((sum, line) => sum + (line.amount ?? 0), 0); // invoice amount = sum of line amounts (VAT-inclusive, as before)
   const cls = (key) => `input ${errs[key] ? 'input-error' : ''}`;
   const aria = (key) => ({ 'aria-invalid': Boolean(errs[key]), 'aria-describedby': errs[key] ? `invoice-${key}-error` : undefined });
 
@@ -52,12 +54,12 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
       {error(key)}
     </label>
   );
-  const amountField = (key, label, isRequired = false) => (
+  const amountField = (key, label) => (
     <label className="label" htmlFor={`invoice-${key}`}>
-      <span className="mb-1.5 block">{label}{isRequired ? star('amount') : <span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span>}</span>
+      <span className="mb-1.5 block">{label}<span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span></span>
       <span className="relative block">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-fg-subtle" aria-hidden="true">₱</span>
-        <input id={`invoice-${key}`} type="text" inputMode="decimal" autoComplete="off" required={isRequired} {...aria(key)} className={`${cls(key)} num pl-7 text-right`} value={form[key]} onChange={set(key)} onBlur={() => setForm({ ...form, [key]: formatAmount(form[key]) })} placeholder="0.00" />
+        <input id={`invoice-${key}`} type="text" inputMode="decimal" autoComplete="off" {...aria(key)} className={`${cls(key)} num pl-7 text-right`} value={form[key]} onChange={set(key)} onBlur={() => setForm({ ...form, [key]: formatAmount(form[key]) })} placeholder="0.00" />
       </span>
       {error(key)}
     </label>
@@ -117,11 +119,13 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             <label htmlFor="invoice_number" className="mb-1.5 block">Invoice No.{star('invoice_number')}</label>
             <span className="flex">
               <select aria-label="Invoice number prefix" className="input !w-auto rounded-r-none border-r-0 bg-surface-2 font-medium" value={form.invoice_prefix} onChange={setInvoicePart('invoice_prefix')}>
-                <option value="SVI">SVI</option><option value="VI">VI</option>
+                {PREFIXES.map((p) => <option key={p} value={p}>{p}</option>)}
+                {!PREFIXES.includes(form.invoice_prefix) && <option value={form.invoice_prefix}>{form.invoice_prefix || 'None'} (current)</option>}
               </select>
               <input id="invoice_number" type="text" required aria-invalid={Boolean(errs.invoice_no)} aria-describedby={errs.invoice_no ? 'invoice-invoice_no-error' : undefined} className={`${cls('invoice_no')} num rounded-l-none`} value={form.invoice_number} onChange={setInvoicePart('invoice_number')} />
             </span>
             {error('invoice_no')}
+            {!errs.invoice_no && form.invoice_number?.trim() && <span className="mt-1 block text-xs font-normal text-fg-muted" role="status">{invoiceNo.value ? <>Saved as <span className="num font-medium text-fg">{invoiceNo.value}</span></> : <span className="text-warning-ink">{invoiceNo.error}</span>}</span>}
           </div>
           {field('cr_no', 'CR No.')}
           {field('due_date', 'Due Date', 'date')}
@@ -132,32 +136,54 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
           <fieldset className="sm:col-span-2" aria-describedby={errs.product_service ? 'invoice-product_service-error' : undefined}>
             <legend className="label mb-1.5 block">Products/Services<span className="ml-0.5 text-danger" aria-hidden="true">*</span></legend>
             <div className="space-y-2">
+              <div className="hidden grid-cols-[minmax(0,1fr)_7.5rem_5rem_7.5rem_2.25rem] gap-2 text-xs font-medium text-fg-muted sm:grid" aria-hidden="true">
+                <span>Product/Service</span><span className="text-right">Unit Cost (₱)</span><span className="text-right">Qty</span><span className="text-right">Amount (₱)</span><span />
+              </div>
               {items.map((it, i) => {
-                const pKey = `items_${i}_product_service`, qKey = `items_${i}_quantity`;
+                const pKey = `items_${i}_product_service`, uKey = `items_${i}_unit_cost`, qKey = `items_${i}_quantity`, line = priced.lines[i];
+                const mobileLabel = 'mb-0.5 block text-[11px] text-fg-subtle sm:hidden';
                 return (
                   <div key={i}>
-                    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_2.25rem] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_2.25rem]">
-                      <select id={`invoice-item-${i}-product`} aria-label={`Product or service ${i + 1}`} required {...aria(pKey)} className={cls(pKey)} value={it.product_service} onChange={(e) => setItem(i, { product_service: e.target.value })}>
-                        <option value="">{products.length ? 'Select a product or service' : 'No options configured'}</option>
-                        {it.product_service && !products.some((p) => p.name === it.product_service) && <option value={it.product_service}>{it.product_service} (current)</option>}
-                        {products.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
-                      </select>
-                      <input id={`invoice-item-${i}-quantity`} type="number" inputMode="decimal" min="0.001" step="any" required aria-label={`Quantity for item ${i + 1}`} placeholder="Qty" {...aria(qKey)} className={`${cls(qKey)} num text-right`} value={it.quantity} onChange={(e) => setItem(i, { quantity: e.target.value })} />
-                      {items.length > 1
-                        ? <button type="button" className="btn btn-secondary btn-icon" onClick={() => removeItem(i)} aria-label={`Remove item ${i + 1}`}><Trash2 size={16} aria-hidden="true" /></button>
-                        : <span aria-hidden="true" />}
+                    <div className="grid grid-cols-3 items-start gap-2 sm:grid-cols-[minmax(0,1fr)_7.5rem_5rem_7.5rem_2.25rem]">
+                      <div className="col-span-3 flex items-start gap-2 sm:contents">
+                        <select id={`invoice-item-${i}-product`} aria-label={`Product or service ${i + 1}`} required {...aria(pKey)} className={`${cls(pKey)} min-w-0 flex-1 sm:flex-none`} value={it.product_service} onChange={(e) => setItem(i, { product_service: e.target.value })}>
+                          <option value="">{products.length ? 'Select a product or service' : 'No options configured'}</option>
+                          {it.product_service && !products.some((p) => p.name === it.product_service) && <option value={it.product_service}>{it.product_service} (current)</option>}
+                          {products.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        </select>
+                        {items.length > 1
+                          ? <button type="button" className="btn btn-secondary btn-icon sm:order-last" onClick={() => removeItem(i)} aria-label={`Remove item ${i + 1}`}><Trash2 size={16} aria-hidden="true" /></button>
+                          : <span aria-hidden="true" className="sm:order-last" />}
+                      </div>
+                      <div className="min-w-0">
+                        <span className={mobileLabel} aria-hidden="true">Unit cost (₱)</span>
+                        <input id={`invoice-item-${i}-unit-cost`} type="text" inputMode="decimal" autoComplete="off" required aria-label={`Unit cost for item ${i + 1}`} placeholder="0.00" {...aria(uKey)} className={`${cls(uKey)} num text-right`} value={it.unit_cost ?? ''} onChange={(e) => setItem(i, { unit_cost: sanitizeDecimal(e.target.value, 2) })} onBlur={() => setItem(i, { unit_cost: formatAmount(it.unit_cost) })} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className={mobileLabel} aria-hidden="true">Qty</span>
+                        <input id={`invoice-item-${i}-quantity`} type="text" inputMode="decimal" autoComplete="off" required aria-label={`Quantity for item ${i + 1}`} placeholder="Qty" {...aria(qKey)} className={`${cls(qKey)} num text-right`} value={it.quantity} onChange={(e) => setItem(i, { quantity: sanitizeDecimal(e.target.value, 3) })} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className={mobileLabel} aria-hidden="true">Amount (₱)</span>
+                        <output aria-label={`Amount for item ${i + 1}`} className="num flex h-9 items-center justify-end truncate rounded-lg border border-line bg-surface-2 px-3 text-sm font-medium text-fg">{line.amount == null ? '—' : money(line.amount)}</output>
+                      </div>
                     </div>
-                    {error(pKey)}{error(qKey)}
+                    {error(pKey)}{error(uKey)}{error(qKey)}
                   </div>
                 );
               })}
             </div>
             {error('product_service')}
+            {form.id && form.amount != null && items.some((it) => !String(it.unit_cost ?? '').trim()) && <p className="mt-2 text-xs text-warning-ink" role="status">This invoice was saved before unit costs were recorded (amount ₱{formatAmount(form.amount)}). Enter a unit cost for each item; the amount is recalculated from them when you save.</p>}
             <button type="button" className="btn btn-secondary mt-2.5" onClick={addItem} disabled={items.length >= MAX_ITEMS}><Plus size={15} aria-hidden="true" />Add Another</button>
           </fieldset>
         </Group>
         <Group id="payment-heading" title="Payment" description="Amount billed, received and current payment state.">
-          {amountField('amount', 'Invoice Amount', true)}
+          <div className="label">
+            <span className="mb-1.5 block" id="invoice-amount-label">Invoice Amount<span className="ml-1.5 text-xs font-normal text-fg-subtle">Calculated</span></span>
+            <output id="invoice-amount" aria-labelledby="invoice-amount-label" aria-live="polite" className="num flex h-9 items-center justify-between rounded-lg border border-line bg-surface-2 px-3 text-sm font-semibold text-fg"><span aria-hidden="true" className="font-normal text-fg-subtle">₱</span>{money(total)}</output>
+            <span className="mt-1 block text-xs font-normal text-fg-muted">Sum of the line amounts (VAT-inclusive). VAT and withholding tax are shown in the preview.</span>
+          </div>
           <label className="label" htmlFor="invoice-payment_status">
             <span className="mb-1.5 block">Payment Status</span>
             <select id="invoice-payment_status" {...aria('payment_status')} className={cls('payment_status')} value={form.payment_status} onChange={set('payment_status')}>{STATUSES.map((status) => <option key={status}>{status}</option>)}</select>
@@ -165,7 +191,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
           </label>
           {!hiddenPaidStatuses.has(String(form.payment_status).trim()) && <>
             {amountField('amount_paid', 'Amount Paid')}
-            {form.payment_status !== 'Cancelled' && hint(form) !== form.payment_status && <p className="self-end pb-2 text-xs text-warning-ink" role="status">Suggested status: {hint(form)}</p>}
+            {form.payment_status !== 'Cancelled' && hint(total / 100, form.amount_paid) !== form.payment_status && <p className="self-end pb-2 text-xs text-warning-ink" role="status">Suggested status: {hint(total / 100, form.amount_paid)}</p>}
           </>}
         </Group>
         {fields.length > 0 && <Group id="custom-fields-heading" title="Additional details" description="Custom fields from Settings.">{fields.map(customField)}</Group>}
@@ -174,7 +200,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
           <textarea id="invoice-remarks" rows="3" className="input resize-y" value={form.remarks} onChange={set('remarks')} placeholder="Add delivery notes or payment details" />
         </label>
       </form>
-      {preview && <InvoicePreview invoice={form} onClose={() => setPreview(false)} />}
+      {preview && <InvoicePreview invoice={{ ...form, invoice_no: invoiceNo.value || '' }} onClose={() => setPreview(false)} />}
     </Modal>
   );
 }

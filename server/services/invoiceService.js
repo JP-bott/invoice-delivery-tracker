@@ -38,21 +38,31 @@ async function withCustom(apiRows, fields) {
   for (const v of rows) if (active.has(Number(v.field_id))) byInvoice.get(Number(v.invoice_id)).custom_fields[Number(v.field_id)] = v.value;
   return out;
 }
-// Adds items: [{ product_service, quantity }] in entered order. Invoices saved before line items existed get one item, quantity 1.
+// Adds items: [{ product_service, quantity, unit_cost, amount }] in entered order (pesos). The invoice amount is the sum of the
+// item amounts. Older records are read without being rewritten: an invoice with no item rows is one item, quantity 1, whose unit
+// cost and amount are the stored amount; item rows saved before unit costs existed get unit_cost / amount null (a single item
+// still carries the invoice amount), and the invoice keeps its stored amount until it is edited and re-priced.
 async function withItems(apiRows) {
   if (!apiRows.length) return apiRows;
   const ids = apiRows.map((r) => r.id);
-  const rows = (await getDb().execute({ sql: `SELECT invoice_id, product_service, quantity FROM invoice_items WHERE invoice_id IN (${ids.map(() => '?').join(',')}) ORDER BY invoice_id, position, id`, args: ids })).rows;
+  const rows = (await getDb().execute({ sql: `SELECT invoice_id, product_service, quantity, unit_cost_centavos, amount_centavos FROM invoice_items WHERE invoice_id IN (${ids.map(() => '?').join(',')}) ORDER BY invoice_id, position, id`, args: ids })).rows;
   const by = new Map();
-  for (const x of rows) { const k = Number(x.invoice_id); if (!by.has(k)) by.set(k, []); by.get(k).push({ product_service: x.product_service, quantity: Number(x.quantity) }); }
-  return apiRows.map((r) => ({ ...r, items: by.get(r.id) || [{ product_service: r.product_service, quantity: 1 }] }));
+  for (const x of rows) { const k = Number(x.invoice_id); if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
+  return apiRows.map((r) => {
+    const list = by.get(r.id);
+    if (!list) return { ...r, items: [{ product_service: r.product_service, quantity: 1, unit_cost: r.amount, amount: r.amount }] };
+    return { ...r, items: list.map((x) => {
+      const priced = x.unit_cost_centavos != null && x.amount_centavos != null;
+      return { product_service: x.product_service, quantity: Number(x.quantity), unit_cost: priced ? toPesos(Number(x.unit_cost_centavos)) : null, amount: priced ? toPesos(Number(x.amount_centavos)) : list.length === 1 ? r.amount : null };
+    }) };
+  });
 }
 export async function get(id) {
   const r = (await getDb().execute({ sql: 'SELECT * FROM invoices WHERE id = ?', args: [id] })).rows[0];
   return r ? (await withItems(await withCustom([toApi(r)], await activeFields())))[0] : null;
 }
 const cols = (v) => [v.date_issued, v.invoice_no, v.cr_no, v.client_name, v.product_service, v.due_date, v.amount_centavos, v.amount_paid_centavos, v.payment_status, v.delivery_date, v.remarks];
-const itemStatements = (items, ref) => items.map((it, i) => ({ sql: `INSERT INTO invoice_items (invoice_id, position, product_service, quantity) SELECT id, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [i, it.product_service, it.quantity, ...ref.args] }));
+const itemStatements = (items, ref) => items.map((it, i) => ({ sql: `INSERT INTO invoice_items (invoice_id, position, product_service, quantity, unit_cost_centavos, amount_centavos) SELECT id, ?, ?, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [i, it.product_service, it.quantity, it.unit_cost_centavos, it.amount_centavos, ...ref.args] }));
 // writes: validated custom values (see customFieldService.validateValues). Invoice and values commit together.
 export async function create(v, writes = []) {
   const now = new Date().toISOString();

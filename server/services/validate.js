@@ -1,45 +1,54 @@
 import { toCentavos } from './money.js';
+import { normalizeInvoiceNo } from '../../shared/invoiceNumber.js';
+import { MAX_ITEMS, priceItems } from '../../shared/pricing.js';
 export const STATUSES = ['Pending', 'Partially Paid', 'Paid', 'Cancelled'];
 export const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
 
-export const MAX_ITEMS = 30;
-const MAX_QTY = 1_000_000;
-const QTY = /^\d+(\.\d{1,3})?$/;
+export { MAX_ITEMS };
 
-// Line items: [{ product_service, quantity }]. A request with only product_service (older clients) is one item, quantity 1.
-// Errors are keyed items_<index>_product_service / items_<index>_quantity.
+// Line items: [{ product_service, unit_cost, quantity }]. Each line amount is Unit Cost x Quantity and the invoice amount is
+// the sum of the line amounts (shared/pricing.js), so it is always derived and never taken from the request.
+// Older clients that send only product_service + amount are read as one item, quantity 1, with that amount as its unit cost.
+// Errors are keyed items_<index>_product_service / items_<index>_unit_cost / items_<index>_quantity.
 function cleanItems(b, e, t) {
   let raw = b.items;
-  if (raw == null) raw = t(b.product_service) ? [{ product_service: b.product_service, quantity: 1 }] : [];
-  if (!Array.isArray(raw) || !raw.length) { e.product_service = 'Required'; return []; }
-  if (raw.length > MAX_ITEMS) { e.product_service = `At most ${MAX_ITEMS} items per invoice`; return []; }
-  return raw.map((it, i) => {
-    const name = t(it?.product_service), q = String(it?.quantity ?? '').replace(/,/g, '').trim();
+  if (raw == null) raw = t(b.product_service) ? [{ product_service: b.product_service, quantity: 1, unit_cost: b.amount ?? '' }] : [];
+  if (!Array.isArray(raw) || !raw.length) { e.product_service = 'Required'; return { items: [], amount: null }; }
+  if (raw.length > MAX_ITEMS) { e.product_service = `At most ${MAX_ITEMS} items per invoice`; return { items: [], amount: null }; }
+  const priced = priceItems(raw.map((it) => ({ unit_cost: it?.unit_cost, quantity: it?.quantity })));
+  const items = raw.map((it, i) => {
+    const name = t(it?.product_service), line = priced.lines[i];
     if (!name) e[`items_${i}_product_service`] = 'Required';
     else if (name.length > 200) e[`items_${i}_product_service`] = 'Must be 200 characters or fewer';
-    if (!QTY.test(q) || !(Number(q) > 0)) e[`items_${i}_quantity`] = 'Enter a quantity above 0 (max 3 decimals)';
-    else if (Number(q) > MAX_QTY) e[`items_${i}_quantity`] = 'Too large';
-    return { product_service: name, quantity: Number(q) };
+    if (line.errors.unit_cost) e[`items_${i}_unit_cost`] = line.errors.unit_cost;
+    if (line.errors.quantity) e[`items_${i}_quantity`] = line.errors.quantity;
+    return { product_service: name, quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000, unit_cost_centavos: line.unit, amount_centavos: line.amount };
   });
+  if (b.items == null && e.items_0_unit_cost) e.amount = 'Valid amount required (max 2 decimals)';
+  return { items, amount: priced.ok ? priced.subtotal : null };
 }
 
-export function validateInvoice(b = {}) {
+// ctx.existingInvoiceNo: on update, an unchanged stored number (including older ones like "VI00123") is kept as it is.
+export function validateInvoice(b = {}, ctx = {}) {
   const e = {}, t = (x) => (typeof x === 'string' ? x.trim() : '');
   const v = {
-    date_issued: t(b.date_issued), invoice_no: t(b.invoice_no), cr_no: t(b.cr_no) || null,
+    date_issued: t(b.date_issued), invoice_no: '', cr_no: t(b.cr_no) || null,
     client_name: t(b.client_name), product_service: '', due_date: t(b.due_date) || null,
     payment_status: b.payment_status, delivery_date: t(b.delivery_date) || null, remarks: t(b.remarks) || null,
   };
   if (!dateOk(v.date_issued)) e.date_issued = 'Valid date required';
-  if (!v.invoice_no) e.invoice_no = 'Required';
+  const typedNo = typeof b.invoice_no === 'string' ? b.invoice_no.trim() : '';
+  if (ctx.existingInvoiceNo && typedNo === ctx.existingInvoiceNo) v.invoice_no = typedNo;
+  else { const n = normalizeInvoiceNo(b.invoice_no, b.invoice_prefix); if (n.error) e.invoice_no = n.error; else v.invoice_no = n.value; }
   if (!v.client_name) e.client_name = 'Required';
-  v.items = cleanItems(b, e, t);
+  const priced = cleanItems(b, e, t);
+  v.items = priced.items;
   v.product_service = v.items.map((it) => it.product_service).filter(Boolean).join(', ');
   if (v.due_date && !dateOk(v.due_date)) e.due_date = 'Invalid date';
   else if (v.due_date && v.due_date < v.date_issued) e.due_date = 'Cannot be earlier than Date Issued';
   if (!STATUSES.includes(v.payment_status)) e.payment_status = 'Invalid status';
-  let amt, paid;
-  try { amt = toCentavos(b.amount ?? ''); } catch { e.amount = 'Valid amount required (max 2 decimals)'; }
+  const amt = priced.amount; // derived from the line items; a submitted `amount` is ignored when items are sent
+  let paid;
   try { paid = toCentavos(b.amount_paid ?? 0); } catch { e.amount_paid = 'Valid amount required (max 2 decimals)'; }
   if (amt != null && paid != null) {
     const s = v.payment_status;

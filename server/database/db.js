@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client';
-import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS } from './schema.js';
+import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS } from './schema.js';
 
 let client;
 let ready;
@@ -24,6 +24,8 @@ export async function initSchema(c = getDb()) {
   await c.batch([...SCHEMA_STATEMENTS, ...CUSTOM_FIELD_STATEMENTS, ...ITEM_STATEMENTS], 'write');
   const columns = await c.execute('PRAGMA table_info(invoices)');
   if (!columns.rows.some((column) => column.name === 'due_date')) await c.execute('ALTER TABLE invoices ADD COLUMN due_date TEXT');
+  const itemColumns = new Set((await c.execute('PRAGMA table_info(invoice_items)')).rows.map((column) => column.name));
+  for (const name of ITEM_PRICING_COLUMNS) if (!itemColumns.has(name)) await c.execute(`ALTER TABLE invoice_items ADD COLUMN ${name} INTEGER`);
   const marker = (await c.execute({ sql: 'SELECT value FROM schema_meta WHERE key = ?', args: ['product_options_seeded'] })).rows[0];
   if (!marker) {
     const now = new Date().toISOString();

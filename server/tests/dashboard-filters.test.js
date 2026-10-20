@@ -8,7 +8,7 @@ beforeAll(async () => {
 });
 const call = (method, url, body) => { const u = new URL(url, 'http://x'); return handle({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body }); };
 const GET = (u) => call('GET', u); const POST = (u, b) => call('POST', u, b); const PUT = (u, b) => call('PUT', u, b); const DEL = (u) => call('DELETE', u);
-const base = { date_issued: '2026-10-05', client_name: 'Beta', product_service: 'P', amount: 100, payment_status: 'Pending', amount_paid: 0 };
+const base = { invoice_prefix: 'SVI', date_issued: '2026-10-05', client_name: 'Beta', product_service: 'P', amount: 100, payment_status: 'Pending', amount_paid: 0 };
 let n = 0; const inv = (x = {}) => ({ ...base, invoice_no: `DF-${++n}`, ...x });
 const filters = async () => (await GET('/api/dashboard-filters')).body.filters;
 const save = (list) => PUT('/api/dashboard-filters', { filters: list.map(({ key, enabled }) => ({ key, enabled })) });
@@ -80,7 +80,7 @@ describe('dashboard applies the chosen filters', () => {
     }
   });
   it('the product filter matches invoices with several products on any of them', async () => {
-    await POST('/api/invoices', inv({ product_service: undefined, items: [{ product_service: 'Cement', quantity: 5 }, { product_service: 'IT Services', quantity: 1 }] }));
+    await POST('/api/invoices', inv({ product_service: undefined, items: [{ product_service: 'Cement', unit_cost: 10, quantity: 5 }, { product_service: 'IT Services', unit_cost: 50, quantity: 1 }] }));
     expect(await count('product=Cement')).toBe(1);
     expect(await count('product=IT%20Services')).toBe(1);
     expect(await count('product=Nothing')).toBe(0);

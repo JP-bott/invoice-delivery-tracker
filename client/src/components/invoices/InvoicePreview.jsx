@@ -1,37 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Printer } from 'lucide-react';
 import Modal from '../Modal.jsx';
-import { formatQty, itemsOf } from '../../utils/items.js';
+import { computeTotals } from '../../../../shared/pricing.js';
+import { money, sheetPricing } from '../../utils/sheetPricing.js';
 import './invoice-sheet.css';
 
 const ROWS = 14; // fits one A5 page once the sheet is rendered with real text
 const SHEET_PX = 559; // 148mm at 96dpi
-const num = (v) => { const n = parseFloat(String(v ?? '').replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
-const cents = (n) => Math.round(n * 100);
-const money = (c) => (c / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const show = (c, always) => (c === 0 && !always ? '' : money(c));
 const longDate = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? new Intl.DateTimeFormat('en-PH', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`)) : '');
 
-// Same arithmetic as the paper template: the invoice amount is the VAT-inclusive total.
-export function computeTotals(amountValue, type, whtRate) {
-  const total = cents(num(amountValue));
-  let net = total, vat = 0, sV = 0, sE = 0, sZ = 0;
-  if (type === 'vatable') { net = Math.round(total / 1.12); vat = total - net; sV = net; }
-  else if (type === 'exempt') sE = total; else sZ = total;
-  const wht = Math.round(net * whtRate);
-  return { total, net, vat, sV, sE, sZ, wht, grand: net + vat - wht, has: total !== 0 };
-}
+export { computeTotals };
 
 export function InvoiceSheet({ invoice, type, whtRate }) {
-  const t = computeTotals(invoice.amount, type, whtRate);
+  const { rows, total } = sheetPricing(invoice);
+  const t = computeTotals(total, type, whtRate);
   const vatable = type === 'vatable';
-  const invoiceNo = invoice.invoice_no || `${invoice.invoice_prefix || ''}${invoice.invoice_number || ''}`;
-  const amount = t.total ? money(t.total) : '';
-  // One row per product/service with its quantity. Only the invoice total is recorded, so the unit cost and
-  // amount are filled in when there is a single item; with several items they stay blank and the totals block carries the amount.
-  const items = itemsOf(invoice), single = items.length === 1;
-  const rows = items.map((it) => ({ q: formatQty(it.qty), d: it.name, u: single && t.total && it.qty ? money(Math.round(t.total / it.qty)) : '', a: single ? amount : '' }));
-  if (!rows.length && t.total) rows.push({ q: '', d: '', u: '', a: amount });
+  const invoiceNo = invoice.invoice_no || ''; // only the actual SVI/SI number; nothing else is generated or appended
   if (invoice.remarks) rows.push({ q: '', d: invoice.remarks, u: '', a: '', sub: true });
   while (rows.length < ROWS) rows.push({ q: '', d: '', u: '', a: '' });
   return (
@@ -44,7 +29,7 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
       </header>
       <div className="title-row">
         <div className="t">SERVICE <b>INVOICE</b></div>
-        <div className="no"><span>Nº</span><span>{invoiceNo}</span></div>
+        <div className="no"><span>{invoiceNo}</span></div>
       </div>
       <table className="info"><tbody>
         <tr><td colSpan="2"><div className="cell">Billed to: <span className="v">{invoice.client_name}</span></div></td><td className="r"><div className="cell">Date: <span className="v">{longDate(invoice.date_issued)}</span></div></td></tr>
@@ -77,7 +62,7 @@ export default function InvoicePreview({ invoice, onClose }) {
   const [zoom, setZoom] = useState(1);
   const wrap = useRef(null);
   const whtRate = useMemo(() => parseFloat(wht) || 0, [wht]);
-  const manyItems = itemsOf(invoice).length > 1;
+  const totalOnly = sheetPricing(invoice).totalOnly;
 
   // Scale the A5 sheet down on narrow screens instead of scrolling sideways.
   useEffect(() => {
@@ -111,7 +96,7 @@ export default function InvoicePreview({ invoice, onClose }) {
         <span className="mr-auto" />
         <button type="button" data-autofocus className="btn btn-primary" onClick={print}><Printer size={15} aria-hidden="true" />Print</button>
       </>}>
-      <p className="text-xs text-fg-subtle" data-print-hide>Sale type and withholding tax only change this preview and are not saved with the invoice.{manyItems && ' With several items, the invoice amount is shown as the total only.'}</p>
+      <p className="text-xs text-fg-subtle" data-print-hide>Sale type and withholding tax only change this preview and are not saved with the invoice.{totalOnly && ' This invoice was saved before unit costs were recorded, so its amount is shown as the total only; edit it to enter unit costs.'}</p>
       <div ref={wrap} className="-mx-5 overflow-x-hidden rounded-lg bg-surface-3 p-3 sm:mx-0" data-print-body>
         <div style={{ zoom }} className="inv-zoom"><InvoiceSheet invoice={invoice} type={type} whtRate={whtRate} /></div>
       </div>
