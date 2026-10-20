@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus } from 'lucide-react';
 import { api, qs } from '../utils/api.js';
 import FilterBar from '../components/invoices/FilterBar.jsx';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
@@ -68,8 +67,7 @@ export default function Invoices() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Invoices" description={loading && !res.total ? 'Loading invoices…' : `${res.total} invoice${res.total === 1 ? '' : 's'}${filtered ? ' match your filters' : ' in total'}`}
-        actions={<button type="button" className="btn btn-primary" onClick={openAdd}><Plus size={16} aria-hidden="true" />Add Invoice</button>} />
+      <PageHeader title="Invoices" description={loading && !res.total ? 'Loading invoices…' : `${res.total} invoice${res.total === 1 ? '' : 's'}${filtered ? ' match your filters' : ' in total'}`} />
       <FilterBar f={f} setF={setF} products={products} onClear={clearFilters} sort={sort}
         onSortField={(k) => setSort({ ...sort, sortBy: k })} onSortDir={() => setSort({ ...sort, sortDir: sort.sortDir === 'asc' ? 'desc' : 'asc' })} />
       <InvoiceTable rows={res.data} loading={loading} sort={sort} onSort={onSort} onEdit={openEdit} onDelete={setDel} onPreview={(r) => setPreview({ ...r, amount: formatAmount(r.amount) })} filtered={filtered} onClear={clearFilters} onAdd={openAdd} />

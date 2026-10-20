@@ -9,6 +9,9 @@ The interface is a token-based design system built on the existing stack (no new
 - **Shell**: collapsible sidebar (drawer on phones), top bar with global search (opens `/invoices?q=...`), skip link, route transitions.
 - **Shared components** (`client/src/components`): `Modal` (focus trap, Escape, scroll lock, inert background), `Toast` (raised only after the API answers), `ui.jsx` (tooltip/hover card, info tips, action menu, skeleton, empty state, page header), `StatusBadge` (icon + text + colour).
 - **Font**: Inter Variable via `@fontsource-variable/inter` (self-hosted). Currency and counts use tabular numerals.
+- **Canvas**: the content area uses a subtle CSS dot grid (`.dot-canvas` in `index.css`: `#FAFBFC` base, `#DDE2E8` dots at 75% opacity, 24px spacing; dark theme uses faint white dots). Cards stay solid white with soft borders. Corner radii (`--radius-*` in the theme) are 2% larger than the previous scale.
+- **Logo**: a placeholder is at `client/public/logo.png`. Replace it with your own file named `logo.png` (or `logo.jpg`; the app tries `.png` first, then `.jpg`, then a built-in icon). It is shown in the sidebar and used as the browser-tab icon. A square image works best.
+- **Add Invoice** lives in one place, the top bar (icon only on phones); the sidebar, dashboard and invoices headers no longer repeat it.
 - Motion respects `prefers-reduced-motion`.
 
 ## Project layout
@@ -68,6 +71,9 @@ Money is integer centavos; status / amount-paid rules are enforced server-side; 
 - Fixed: collapse/expand of client groups in the analytics dialog, and numeric sorting by amount in that dialog.
 - "Add Invoice" in the sidebar/top bar opens the form via `/invoices?new=1`.
 - Invoice rows show a derived "Overdue" tag (unpaid, due date before today, Asia/Manila). It is a display hint, separate from the stored payment status.
+
+## Dashboard KPIs (counts first)
+The top cards answer "how many", as of today: Total Invoices (excluding cancelled), Pending Payments (Pending + Partially Paid with a balance), Overdue (unpaid and past the Due Date; invoices with no due date are not overdue), Delivered and Pending Deliveries. They ignore the date-range filter (client/product filters still apply). Peso amounts appear only in the hover card; clicking opens the matching invoices (Pending/Overdue in a searchable dialog grouped by client). The "Unpaid invoices by due date" doughnut follows the same rule. The collected-revenue, trend and top-client charts remain money charts and still use the date range.
 
 ## Invoice preview
 An eye button in the Add/Edit Invoice form (and "Preview invoice" in each row's action menu) opens a print-ready Quandatics service invoice (A5) built from the form values, before anything is saved. Total Sales is the invoice amount treated as VAT-inclusive; the Sale type (VATable 12% / VAT-Exempt / Zero Rated) and Withholding tax selectors only affect the preview and are not stored. Address, TIN and P.O. No. are not part of the data model, so they print blank. Print uses the browser dialog and produces a single A5 page (`client/src/components/invoices/InvoicePreview.jsx`, `invoice-sheet.css`).

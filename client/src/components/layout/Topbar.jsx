@@ -29,7 +29,7 @@ export default function Topbar({ theme, onToggleTheme, onOpenMenu }) {
       <button type="button" className="btn btn-ghost btn-icon" onClick={onToggleTheme} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
         {theme === 'dark' ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
       </button>
-      <button type="button" className="btn btn-primary hidden sm:inline-flex" onClick={() => navigate('/invoices?new=1')}><Plus size={16} aria-hidden="true" />Add Invoice</button>
+      <button type="button" className="btn btn-primary max-sm:btn-icon" onClick={() => navigate('/invoices?new=1')} aria-label="Add invoice"><Plus size={16} aria-hidden="true" /><span className="hidden sm:inline">Add Invoice</span></button>
     </header>
   );
 }

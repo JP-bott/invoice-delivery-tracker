@@ -11,11 +11,12 @@
    light/dark switch only has to redefine the variables below.
    ------------------------------------------------------------------ */
 :root {
-  --canvas: #f6f7f9;
+  --canvas: #fafbfc;
+  --dot: rgb(221 226 232 / 0.75);      /* #DDE2E8 at low opacity */
   --surface: #ffffff;
   --surface-2: #f2f4f7;       /* muted fills: table headers, inputs hover */
   --surface-3: #e9ecf1;
-  --line: #e4e7ec;
+  --line: #e5e8ed;
   --line-strong: #cfd4dc;
 
   --fg: #14171f;
@@ -72,6 +73,7 @@
 
 .dark {
   --canvas: #0d0f14;
+  --dot: rgb(255 255 255 / 0.07);
   --surface: #15181f;
   --surface-2: #1b1f28;
   --surface-3: #242935;
@@ -153,6 +155,12 @@
   --color-tooltip: var(--tooltip-bg);
   --color-tooltip-fg: var(--tooltip-fg);
 
+  /* Corner radii: +2% over the previous scale (0.5 / 0.75 / 1rem) */
+  --radius-md: 0.3825rem;
+  --radius-lg: 0.51rem;
+  --radius-xl: 0.765rem;
+  --radius-2xl: 1.02rem;
+
   --shadow-card: var(--elev-card);
   --shadow-pop: var(--elev-pop);
 }
@@ -191,11 +199,32 @@
     transition-duration: var(--dur-fast);
   }
   .btn-primary { @apply bg-brand text-brand-fg shadow-sm hover:bg-brand-hover active:translate-y-px; }
+  .btn-primary:hover { box-shadow: 0 4px 12px -3px color-mix(in srgb, var(--brand) 55%, transparent); }
   .btn-secondary { @apply border border-line-strong bg-surface text-fg hover:bg-surface-2 active:translate-y-px; }
   .btn-ghost { @apply text-fg-muted hover:bg-surface-2 hover:text-fg; }
   .btn-danger { @apply bg-danger text-white hover:brightness-110 active:translate-y-px; }
   .btn-sm { @apply h-8 px-3 text-[13px]; }
   .btn-icon { @apply h-9 w-9 shrink-0 px-0; }
+  .btn svg { transition: transform var(--dur-fast) var(--ease); }
+  .btn-secondary:hover svg, .btn-ghost:hover svg { transform: scale(1.06); }
+
+  /* Cards that act as buttons: a barely-there lift, never more than 1px */
+  .card-interactive { transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+  .card-interactive:hover { transform: translateY(-1px); box-shadow: var(--elev-pop); border-color: var(--line-strong); }
+  .card-interactive:active { transform: translateY(0); }
+
+  /* Sidebar navigation */
+  .nav-item { @apply relative flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-fg-muted outline-none; transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease; }
+  .nav-item::before { content: ""; position: absolute; left: -0.75rem; top: 50%; width: 3px; height: 1.25rem; border-radius: 0 3px 3px 0; background: var(--brand); transform: translateY(-50%) scaleY(0); transition: transform var(--dur) var(--ease); }
+  .nav-item:hover { background: var(--surface-2); color: var(--fg); }
+  .nav-item:focus-visible { box-shadow: inset 0 0 0 2px var(--brand); }
+  .nav-icon { transition: transform var(--dur) var(--ease), color var(--dur-fast) ease; }
+  .nav-item:hover .nav-icon { transform: translateX(1px) scale(1.06); color: var(--brand); }
+  .nav-item.is-active { background: var(--brand-soft); color: var(--brand-ink); }
+  .nav-item.is-active::before { transform: translateY(-50%) scaleY(1); }
+  .nav-item.is-active .nav-icon { color: var(--brand); }
+  .nav-item.is-active:hover { background: var(--brand-soft); }
+
 
   .input {
     @apply block h-9 w-full rounded-lg border border-line-strong bg-surface px-3 text-sm text-fg shadow-sm outline-none transition placeholder:text-fg-subtle hover:border-fg-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-60;
@@ -217,6 +246,14 @@
 
   .th { @apply whitespace-nowrap px-3 py-2.5 text-left text-xs font-medium text-fg-muted; }
   .td { @apply px-3 py-2.5 align-middle; }
+}
+
+/* Subtle dot-grid canvas behind the dashboard content: tiny evenly spaced dots, 24px apart. */
+.dot-canvas {
+  background-color: var(--canvas);
+  background-image: radial-gradient(circle at center, var(--dot) 1px, transparent 1.25px);
+  background-size: 24px 24px;
+  background-position: 12px 12px;
 }
 
 /* Skeleton shimmer */

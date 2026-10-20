@@ -65,7 +65,7 @@ export function HoverCard({ content, children, side = 'top', delay = 150, classN
   }, [open]);
   const child = isValidElement(children) ? cloneElement(children, { 'aria-describedby': open ? id : undefined }) : children;
   return (
-    <span ref={anchor} className={`relative inline-flex ${className}`} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+    <span ref={anchor} className={`relative ${className.includes("block") ? "" : "inline-flex"} ${className}`} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
       {child}
       {open && content && createPortal(
         <div ref={tip} id={id} role="tooltip" style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
