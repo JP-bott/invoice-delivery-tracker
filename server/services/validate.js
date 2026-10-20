@@ -1,6 +1,6 @@
 import { toCentavos } from './money.js';
 export const STATUSES = ['Pending', 'Partially Paid', 'Paid', 'Cancelled'];
-const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
+export const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
 
 export function validateInvoice(b = {}) {
   const e = {}, t = (x) => (typeof x === 'string' ? x.trim() : '');

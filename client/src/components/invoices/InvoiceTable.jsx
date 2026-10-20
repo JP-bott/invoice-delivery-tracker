@@ -1,11 +1,11 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Eye, FileSearch, Pencil, Trash2 } from 'lucide-react';
 import { peso } from '../../utils/api.js';
 import { today } from '../../utils/dates.js';
+import { displayValue } from '../../utils/customFields.js';
 import StatusBadge, { OverdueBadge } from '../StatusBadge.jsx';
 import { ActionMenu, EmptyState, Skeleton } from '../ui.jsx';
 
 const COLS = [['date_issued', 'Date Issued'], ['invoice_no', 'Invoice No.'], ['cr_no', 'CR No.'], ['client_name', 'Client'], ['product_service', 'Product/Service'], ['due_date', 'Due Date'], ['amount', 'Amount', 'r'], ['amount_paid', 'Paid', 'r'], [null, 'Outstanding', 'r'], ['payment_status', 'Payment'], ['delivery_date', 'Delivery Date'], [null, 'Delivery'], [null, 'Remarks'], [null, '']];
-const COUNT = COLS.length;
 const daysLate = (due, now) => Math.round((Date.parse(now) - Date.parse(due)) / 86400000);
 const isOverdue = (r, now) => r.due_date && r.due_date < now && r.outstanding > 0 && ['Pending', 'Partially Paid'].includes(r.payment_status);
 
@@ -15,8 +15,12 @@ const actions = (r, onEdit, onDelete, onPreview) => [
   { label: 'Delete invoice', icon: Trash2, onClick: () => onDelete(r), danger: true },
 ];
 
-export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDelete, onPreview, filtered, onClear, onAdd }) {
+export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDelete, onPreview, filtered, onClear, onAdd, fields = [] }) {
   const now = today();
+  const extra = fields.filter((f) => f.show_in_table); // custom columns sit between Remarks and the actions menu
+  const COUNT = COLS.length + extra.length;
+  const heads = [...COLS.slice(0, -1), ...extra.map((f) => [null, f.label, f.input_type === 'number' ? 'r' : undefined]), COLS[COLS.length - 1]];
+  const shown = (r, f) => displayValue(f, r.custom_fields?.[f.id]);
   const ariaSort = (k) => (sort.sortBy === k ? (sort.sortDir === 'asc' ? 'ascending' : 'descending') : undefined);
   const empty = !loading && !rows.length;
   const emptyState = filtered
@@ -30,7 +34,7 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
         <table className="w-full whitespace-nowrap text-sm">
           <caption className="sr-only">Invoices and transactions</caption>
           <thead className="border-b border-line bg-surface-2/70">
-            <tr>{COLS.map(([k, l, align], i) => (
+            <tr>{heads.map(([k, l, align], i) => (
               <th key={i} scope="col" aria-sort={k ? ariaSort(k) : undefined} className={`th ${align === 'r' ? '!text-right' : ''} ${k === 'invoice_no' ? 'sticky left-0 z-[1] bg-surface-2' : ''}`}>
                 {k ? (
                   <button type="button" className={`-mx-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:text-fg ${sort.sortBy === k ? 'text-fg' : ''}`} onClick={() => onSort(k)}>
@@ -57,6 +61,7 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
                   <td className="td num text-fg-muted">{r.delivery_date}</td>
                   <td className="td"><StatusBadge status={r.deliveryStatus === 'Delivered' ? 'Delivered' : 'Pending'} label={r.deliveryStatus} /></td>
                   <td className="td max-w-[10rem] truncate text-fg-muted" title={r.remarks || undefined}>{r.remarks}</td>
+                  {extra.map((f) => <td key={f.id} className={`td max-w-[12rem] truncate text-fg-muted ${f.input_type === 'number' ? 'num text-right' : ''}`} title={shown(r, f)}>{shown(r, f)}</td>)}
                   <td className="td text-right"><ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete, onPreview)} /></td>
                 </tr>))}
           </tbody>
@@ -78,6 +83,7 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
                 <div><p className="num text-lg font-semibold text-fg">{peso(r.amount)}</p><p className="num text-xs text-fg-muted">{r.outstanding > 0 ? `${peso(r.outstanding)} outstanding` : 'Fully paid'}</p></div>
                 <div className="flex flex-wrap justify-end gap-1.5"><StatusBadge status={r.payment_status} /><StatusBadge status={r.deliveryStatus === 'Delivered' ? 'Delivered' : 'Pending'} label={r.deliveryStatus} /></div>
               </div>
+              {extra.some((f) => r.custom_fields?.[f.id]) && <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted">{extra.filter((f) => r.custom_fields?.[f.id]).map((f) => <span key={f.id}>{f.label}: {shown(r, f)}</span>)}</p>}
               <p className="num mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-subtle">
                 <span>Issued {r.date_issued}</span>{r.due_date && <span>Due {r.due_date}</span>}{isOverdue(r, now) && <OverdueBadge days={daysLate(r.due_date, now)} />}
               </p>

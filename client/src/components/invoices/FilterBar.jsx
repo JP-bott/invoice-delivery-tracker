@@ -1,16 +1,26 @@
 import { useState } from 'react';
 import { ArrowDownAZ, ArrowUpAZ, Search, SlidersHorizontal, X } from 'lucide-react';
 import { STATUSES } from '../../utils/constants.js';
+import { filterKey, isCustomFilterKey } from '../../utils/customFields.js';
 
 export const SORT_OPTIONS = [['date_issued', 'Date issued'], ['invoice_no', 'Invoice no.'], ['client_name', 'Client'], ['due_date', 'Due date'], ['amount', 'Amount'], ['amount_paid', 'Amount paid'], ['payment_status', 'Payment status'], ['delivery_date', 'Delivery date']];
 const FILTER_KEYS = ['q', 'dateFrom', 'dateTo', 'client', 'product', 'paymentStatus', 'deliveryStatus'];
 
-export default function FilterBar({ f, setF, onClear, products = [], sort, onSortField, onSortDir }) {
+export default function FilterBar({ f, setF, onClear, products = [], fields = [], sort, onSortField, onSortDir }) {
   const [open, setOpen] = useState(false);
-  const active = FILTER_KEYS.filter((k) => f[k]).length;
-  const secondary = FILTER_KEYS.filter((k) => k !== 'q' && f[k]).length;
+  const keys = [...FILTER_KEYS, ...Object.keys(f).filter(isCustomFilterKey)]; // custom-field filters are cf_<id>
+  const active = keys.filter((k) => f[k]).length;
+  const secondary = keys.filter((k) => k !== 'q' && f[k]).length;
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const label = (text, child) => <label className="block"><span className="label mb-1">{text}</span>{child}</label>;
+  const customFilter = (field) => {
+    const key = filterKey(field), value = f[key] || '', common = { 'aria-label': `${field.label} filter`, className: 'input', value, onChange: set(key) };
+    if (field.input_type === 'dropdown') return label(field.label, <select {...common}><option value="">Any</option>{field.options.map((o) => <option key={o}>{o}</option>)}</select>);
+    if (field.input_type === 'checkbox') return label(field.label, <select {...common}><option value="">Any</option><option value="true">Yes</option><option value="false">No</option></select>);
+    if (field.input_type === 'date') return label(field.label, <input type="date" {...common} />);
+    if (field.input_type === 'number') return label(field.label, <input type="number" step="any" placeholder="Equals…" {...common} />);
+    return label(field.label, <input type="text" placeholder="Contains…" {...common} />);
+  };
   return (
     <section aria-label="Filter invoices" className="card card-pad !py-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -34,6 +44,7 @@ export default function FilterBar({ f, setF, onClear, products = [], sort, onSor
         {label('Payment', <select aria-label="Payment status" className="input" value={f.paymentStatus} onChange={set('paymentStatus')}><option value="">Any payment</option><option value="unpaid">Unpaid (pending + partial)</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>)}
         {label('Delivery', <select aria-label="Delivery status" className="input" value={f.deliveryStatus} onChange={set('deliveryStatus')}><option value="">Any delivery</option><option>Pending</option><option>Delivered</option></select>)}
         {label('Issued from', <input type="date" aria-label="Date from" className="input" value={f.dateFrom} max={f.dateTo || undefined} onChange={set('dateFrom')} />)}
+        {fields.map((field) => <div key={field.id} className="contents">{customFilter(field)}</div>)}
         {label('Issued to', <input type="date" aria-label="Date to" className="input" value={f.dateTo} min={f.dateFrom || undefined} onChange={set('dateTo')} />)}
       </div>
     </section>

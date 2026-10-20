@@ -4,6 +4,7 @@ import { api } from '../utils/api.js';
 import { useToast } from '../components/Toast.jsx';
 import Modal from '../components/Modal.jsx';
 import { EmptyState, PageHeader, Skeleton } from '../components/ui.jsx';
+import InvoiceFieldsSection from '../components/settings/InvoiceFieldsSection.jsx';
 
 export default function Settings() {
   const toast = useToast();
@@ -32,7 +33,7 @@ export default function Settings() {
   const ActionIcon = editing ? Save : Plus;
   return (
     <div className="max-w-3xl">
-      <PageHeader title="Settings" description="Manage the options available when recording an invoice." />
+      <PageHeader title="Settings" description="Manage the options and custom fields available when recording an invoice." />
       <section className="card card-pad" aria-labelledby="products-heading">
         <div className="mb-4"><h2 id="products-heading" className="section-title">Product/Service options</h2><p className="mt-1 text-sm text-fg-muted">These options appear in the Add and Edit Invoice forms.</p></div>
         <form onSubmit={save} className="flex flex-col gap-2 sm:flex-row">
@@ -55,6 +56,7 @@ export default function Settings() {
               </li>))}</ul>}
         </div>
       </section>
+      <InvoiceFieldsSection />
       {confirm && (
         <Modal title="Delete option?" description="Existing invoices will keep this value." onClose={() => !busy && setConfirm(null)} width="max-w-md"
           footer={<><button type="button" className="btn btn-secondary" onClick={() => setConfirm(null)} disabled={busy}>Cancel</button><button type="button" className="btn btn-danger" onClick={remove} disabled={busy}>{busy ? 'Deleting…' : 'Delete option'}</button></>}>

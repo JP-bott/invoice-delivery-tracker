@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Eye, Loader2 } from 'lucide-react';
 import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
+import { valueOf } from '../../utils/customFields.js';
 import Modal from '../Modal.jsx';
 import { HoverCard } from '../ui.jsx';
 import InvoicePreview from './InvoicePreview.jsx';
@@ -21,7 +22,7 @@ function Group({ id, title, description, children }) {
   );
 }
 
-export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, products = [], saving = false }) {
+export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, products = [], fields = [], saving = false }) {
   const [preview, setPreview] = useState(false);
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
   const setInvoicePart = (key) => (event) => {
@@ -32,6 +33,8 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   };
   const error = (key) => errs[key] && <span id={`invoice-${key}-error`} role="alert" className="mt-1 block text-xs font-normal text-danger-ink">{errs[key]}</span>;
   const star = (key) => required.has(key) ? <span className="ml-0.5 text-danger" aria-hidden="true">*</span> : <span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span>;
+  const setCustom = (id, value) => setForm({ ...form, custom_fields: { ...(form.custom_fields || {}), [id]: value } });
+  const cfStar = (f) => (f.required ? <span className="ml-0.5 text-danger" aria-hidden="true">*</span> : <span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span>);
   const cls = (key) => `input ${errs[key] ? 'input-error' : ''}`;
   const aria = (key) => ({ 'aria-invalid': Boolean(errs[key]), 'aria-describedby': errs[key] ? `invoice-${key}-error` : undefined });
 
@@ -52,6 +55,43 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
       {error(key)}
     </label>
   );
+
+  // One input per custom field (Settings > Invoice fields). Errors arrive keyed cf_<id>.
+  const customField = (f) => {
+    const key = `cf_${f.id}`, id = `invoice-${key}`, value = valueOf(f, form.custom_fields), on = (e) => setCustom(f.id, e.target.value);
+    if (f.input_type === 'checkbox') {
+      return (
+        <div key={f.id} className="self-end pb-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-fg" htmlFor={id}>
+            <input id={id} type="checkbox" className="h-4 w-4 accent-[var(--brand)]" required={f.required} {...aria(key)} checked={value === 'true'} onChange={(e) => setCustom(f.id, e.target.checked ? 'true' : 'false')} />
+            <span>{f.label}{cfStar(f)}</span>
+          </label>
+          {error(key)}
+        </div>
+      );
+    }
+    let input;
+    if (f.input_type === 'dropdown') {
+      input = (
+        <select id={id} required={f.required} {...aria(key)} className={cls(key)} value={value} onChange={on}>
+          <option value="">Select an option</option>
+          {value && !f.options.includes(value) && <option value={value}>{value} (current)</option>}
+          {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>);
+    } else if (f.input_type === 'textarea') {
+      input = <textarea id={id} rows="3" required={f.required} {...aria(key)} className={`${cls(key)} resize-y`} value={value} onChange={on} maxLength={2000} />;
+    } else {
+      const type = { number: 'number', date: 'date', email: 'email', url: 'url' }[f.input_type] || 'text';
+      input = <input id={id} type={type} step={type === 'number' ? 'any' : undefined} required={f.required} {...aria(key)} className={`${cls(key)} ${type === 'number' ? 'num' : ''}`} value={value} onChange={on} maxLength={f.input_type === 'text' ? 500 : undefined} />;
+    }
+    return (
+      <label key={f.id} className={`label ${f.input_type === 'textarea' ? 'sm:col-span-2' : ''}`} htmlFor={id}>
+        <span className="mb-1.5 block">{f.label}{cfStar(f)}</span>
+        {input}
+        {error(key)}
+      </label>
+    );
+  };
 
   return (
     <Modal title={`${form.id ? 'Edit' : 'Add'} invoice`} description={form.id ? `Update ${form.invoice_no || 'this invoice'}.` : 'Record a new invoice and its delivery details.'} onClose={onCancel} width="max-w-2xl" dismissOnBackdrop={false}
@@ -104,6 +144,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             {form.payment_status !== 'Cancelled' && hint(form) !== form.payment_status && <p className="self-end pb-2 text-xs text-warning-ink" role="status">Suggested status: {hint(form)}</p>}
           </>}
         </Group>
+        {fields.length > 0 && <Group id="custom-fields-heading" title="Additional details" description="Custom fields from Settings.">{fields.map(customField)}</Group>}
         <label className="label block" htmlFor="invoice-remarks">
           <span className="mb-1.5 block">Remarks<span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span></span>
           <textarea id="invoice-remarks" rows="3" className="input resize-y" value={form.remarks} onChange={set('remarks')} placeholder="Add delivery notes or payment details" />

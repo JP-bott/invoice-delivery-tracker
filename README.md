@@ -22,6 +22,7 @@ server/handler.js       framework-free API router: handle({method,path,query,bod
 server/services/        validation, money, filters, invoice + dashboard queries
 server/database/        libSQL client, schema, init, seed, copy-data
 migrations/001_init.sql idempotent schema (mirrors server/database/schema.js; a test keeps them in sync)
+migrations/002_invoice_custom_fields.sql  additive tables for custom invoice fields (mirrors CUSTOM_FIELD_STATEMENTS; also test-checked)
 vercel.json             build, output directory, rewrites
 ```
 
@@ -50,7 +51,7 @@ With no `TURSO_DATABASE_URL`, development uses a local SQLite file `./local.db`.
 
 ## Tests and build
 ```
-npm test          # vitest: validation, money, API handler (temp DB), adapter, dates, config, migration file
+npm test          # vitest: validation, money, API handler (temp DB), adapter, dates, config, migration files, custom invoice fields
 npm run build     # vite build -> client/dist
 ```
 
@@ -61,6 +62,14 @@ npm run build     # vite build -> client/dist
 4. Project Settings, Environment Variables (Production and Preview): `TURSO_DATABASE_URL` (libsql://...), `TURSO_AUTH_TOKEN`.
 5. Deploy. Verify: open the site; `GET /api/filters/clients` returns JSON (`[]` on an empty DB); create an invoice and reload to confirm it persists.
 6. To bring existing records over, run the `copy-data.js` step above from your machine against the Turso URL.
+
+## Custom invoice fields (Settings > Invoice fields)
+Add, edit, reorder and delete extra fields for the Add/Edit Invoice forms without touching code. Each field has a label, an input type (Text, Long text, Number, Date, Dropdown, Checkbox, Email, Link), a Required flag, a "show as a column" flag and, for dropdowns, its own list of options (add / rename / remove inside the field editor).
+- **Data**: definitions live in `invoice_fields`; values in `invoice_custom_values` (one row per invoice + field, stored as text; an empty value is no row). The `invoices` table is not altered. The tables are created automatically on the first request (`CREATE ... IF NOT EXISTS`) and by `migrations/002_invoice_custom_fields.sql`; existing invoices are untouched.
+- **API**: `GET/POST /api/invoice-fields`, `PUT /api/invoice-fields/:id`, `DELETE /api/invoice-fields/:id` (archive), `DELETE ...?permanent=1`, `POST .../:id/restore`, `PUT /api/invoice-fields/order`. Invoices accept and return `custom_fields: { "<fieldId>": "value" }`; validation errors come back as `fields.cf_<fieldId>`.
+- **Safe deletes and edits**: *Delete* archives the field (hidden from forms, search, filters and the table) and keeps every saved value; it can be restored from "Deleted fields", or removed permanently (which erases its values). The input type is locked once any invoice has a value (Text and Long text may still swap). Removing or renaming a dropdown option never rewrites invoices; an invoice keeps its old value and can still be saved unchanged. A field missing from a save request is left exactly as stored, so a stale browser tab cannot wipe data.
+- **Required** fields are enforced on create and on the next save of an invoice; reading and listing old invoices is never blocked. Limits: 30 active fields, 100 options per dropdown.
+- **Search/filter/display**: global search also matches custom text/number/date/dropdown values (checkboxes are excluded); the filter panel gets one control per field (`cf_<id>` query parameters); fields flagged for the list appear as extra columns (a summary line on phones). Custom columns are not sortable, and the dashboard and A5 invoice preview do not use custom fields.
 
 ## Business rules (unchanged)
 Money is integer centavos; status / amount-paid rules are enforced server-side; delivery status is derived from Delivery Date; invoice numbers are trimmed and unique case-insensitively (SQLite NOCASE folds ASCII only); the dashboard excludes Cancelled except the status distribution and recent list; dates use Asia/Manila. Dashboard client/product filters are exact match; invoice-list filters are "contains". Dashboard analytics calculate outstanding balances from amount minus amount paid, classify invoices by the optional Due Date, and show a No due date category. Collected Revenue is grouped by invoice issue month because the schema does not store payment dates; this limitation is shown in the dashboard.
