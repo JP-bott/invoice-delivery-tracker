@@ -23,6 +23,7 @@ server/services/        validation, money, filters, invoice + dashboard queries
 server/database/        libSQL client, schema, init, seed, copy-data
 migrations/001_init.sql idempotent schema (mirrors server/database/schema.js; a test keeps them in sync)
 migrations/002_invoice_custom_fields.sql  additive tables for custom invoice fields (mirrors CUSTOM_FIELD_STATEMENTS; also test-checked)
+migrations/003_invoice_items.sql  additive table for invoice line items (mirrors ITEM_STATEMENTS; also test-checked)
 vercel.json             build, output directory, rewrites
 ```
 
@@ -70,6 +71,14 @@ Add, edit, reorder and delete extra fields for the Add/Edit Invoice forms withou
 - **Safe deletes and edits**: *Delete* archives the field (hidden from forms, search, filters and the table) and keeps every saved value; it can be restored from "Deleted fields", or removed permanently (which erases its values). The input type is locked once any invoice has a value (Text and Long text may still swap). Removing or renaming a dropdown option never rewrites invoices; an invoice keeps its old value and can still be saved unchanged. A field missing from a save request is left exactly as stored, so a stale browser tab cannot wipe data.
 - **Required** fields are enforced on create and on the next save of an invoice; reading and listing old invoices is never blocked. Limits: 30 active fields, 100 options per dropdown.
 - **Search/filter/display**: global search also matches custom text/number/date/dropdown values (checkboxes are excluded); the filter panel gets one control per field (`cf_<id>` query parameters); fields flagged for the list appear as extra columns (a summary line on phones). Custom columns are not sortable, and the dashboard and A5 invoice preview do not use custom fields.
+
+## Multiple products/services per invoice
+The Add/Edit Invoice form takes any number of products/services, each with a quantity (**Add Another** adds a row; up to 30 rows, quantity above 0 with up to 3 decimals).
+- **Data**: rows live in `invoice_items` (`invoice_id`, `position`, `product_service`, `quantity`), created automatically on the first request and by `migrations/003_invoice_items.sql`. `invoices.product_service` is kept as the item names joined with ", " so search, the product filter, sorting and the dashboard keep working. Invoices saved earlier have no item rows and are read as one item with quantity 1; nothing is rewritten.
+- **API**: invoices accept and return `items: [{ product_service, quantity }]`. A request with only `product_service` still works (one item, quantity 1). Validation errors come back as `items_<row>_product_service` / `items_<row>_quantity`.
+- **Preview**: one row per item with its quantity. Only the invoice total is stored, so unit cost and amount are filled in for a single item; with several items they stay blank and the totals block shows the amount.
+- **Limits**: the dashboard "Top products & services" chart and its exact-match product filter work on the joined text, so an invoice with several items appears as one combined entry there.
+- The invoices list shows items as "Cement × 10, IT Services × 2", and shows — for empty CR No., Delivery Date, Remarks and Due Date.
 
 ## Business rules (unchanged)
 Money is integer centavos; status / amount-paid rules are enforced server-side; delivery status is derived from Delivery Date; invoice numbers are trimmed and unique case-insensitively (SQLite NOCASE folds ASCII only); the dashboard excludes Cancelled except the status distribution and recent list; dates use Asia/Manila. Dashboard client/product filters are exact match; invoice-list filters are "contains". Dashboard analytics calculate outstanding balances from amount minus amount paid, classify invoices by the optional Due Date, and show a No due date category. Collected Revenue is grouped by invoice issue month because the schema does not store payment dates; this limitation is shown in the dashboard.

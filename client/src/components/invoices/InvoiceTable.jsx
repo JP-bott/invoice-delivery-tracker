@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Eye, FileSearch, Pencil, Trash2 } from
 import { peso } from '../../utils/api.js';
 import { today } from '../../utils/dates.js';
 import { displayValue } from '../../utils/customFields.js';
+import { itemsSummary } from '../../utils/items.js';
 import StatusBadge, { OverdueBadge } from '../StatusBadge.jsx';
 import { ActionMenu, EmptyState, Skeleton } from '../ui.jsx';
 
@@ -50,17 +51,17 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
                 <tr key={r.id} className="group h-[var(--row-h)] border-b border-line transition-colors last:border-0 hover:bg-surface-2">
                   <td className="td num text-fg-muted">{r.date_issued}</td>
                   <td className="td num sticky left-0 bg-surface font-medium text-fg transition-colors group-hover:bg-surface-2">{r.invoice_no}</td>
-                  <td className="td num text-fg-muted">{r.cr_no}</td>
+                  <td className="td num text-fg-muted">{r.cr_no || '—'}</td>
                   <td className="td max-w-[14rem] truncate" title={r.client_name}>{r.client_name}</td>
-                  <td className="td max-w-[12rem] truncate text-fg-muted" title={r.product_service}>{r.product_service}</td>
+                  <td className="td max-w-[16rem] truncate text-fg-muted" title={itemsSummary(r)}>{itemsSummary(r)}</td>
                   <td className="td num text-fg-muted">{r.due_date || '—'}{isOverdue(r, now) && <span className="ml-2"><OverdueBadge days={daysLate(r.due_date, now)} /></span>}</td>
                   <td className="td num text-right">{peso(r.amount)}</td>
                   <td className="td num text-right text-fg-muted">{peso(r.amount_paid)}</td>
                   <td className={`td num text-right font-medium ${r.outstanding > 0 ? 'text-fg' : 'text-fg-subtle'}`}>{peso(r.outstanding)}</td>
                   <td className="td"><StatusBadge status={r.payment_status} /></td>
-                  <td className="td num text-fg-muted">{r.delivery_date}</td>
+                  <td className="td num text-fg-muted">{r.delivery_date || '—'}</td>
                   <td className="td"><StatusBadge status={r.deliveryStatus === 'Delivered' ? 'Delivered' : 'Pending'} label={r.deliveryStatus} /></td>
-                  <td className="td max-w-[10rem] truncate text-fg-muted" title={r.remarks || undefined}>{r.remarks}</td>
+                  <td className="td max-w-[10rem] truncate text-fg-muted" title={r.remarks || undefined}>{r.remarks || '—'}</td>
                   {extra.map((f) => <td key={f.id} className={`td max-w-[12rem] truncate text-fg-muted ${f.input_type === 'number' ? 'num text-right' : ''}`} title={shown(r, f)}>{shown(r, f)}</td>)}
                   <td className="td text-right"><ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete, onPreview)} /></td>
                 </tr>))}
@@ -78,7 +79,7 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
                 <div className="min-w-0"><p className="num font-semibold text-fg">{r.invoice_no}</p><p className="truncate text-sm text-fg-muted">{r.client_name}</p></div>
                 <ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete, onPreview)} />
               </div>
-              <p className="mt-0.5 truncate text-xs text-fg-subtle">{r.product_service}</p>
+              <p className="mt-0.5 truncate text-xs text-fg-subtle">{itemsSummary(r)}</p>
               <div className="mt-3 flex items-end justify-between gap-3">
                 <div><p className="num text-lg font-semibold text-fg">{peso(r.amount)}</p><p className="num text-xs text-fg-muted">{r.outstanding > 0 ? `${peso(r.outstanding)} outstanding` : 'Fully paid'}</p></div>
                 <div className="flex flex-wrap justify-end gap-1.5"><StatusBadge status={r.payment_status} /><StatusBadge status={r.deliveryStatus === 'Delivered' ? 'Delivered' : 'Pending'} label={r.deliveryStatus} /></div>

@@ -76,7 +76,7 @@ async function route(method, seg, query, body) {
   }
   if (area === 'dashboard' && method === 'GET' && a && Object.hasOwn(handlers, a)) return () => handlers[a](query).then(ok);
   if (area === 'filters' && method === 'GET' && a === 'clients') return () => inv.distinct('client_name').then(ok);
-  if (area === 'filters' && method === 'GET' && a === 'products') return () => Promise.all([products.list(), inv.distinct('product_service')]).then(([configured, used]) => ok([...new Set([...configured.map((p) => p.name), ...used])]));
+  if (area === 'filters' && method === 'GET' && a === 'products') return () => Promise.all([products.list(), inv.distinctProducts()]).then(([configured, used]) => ok([...new Set([...configured.map((p) => p.name), ...used])]));
   return null;
 }
 

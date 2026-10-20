@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Eye, Loader2 } from 'lucide-react';
+import { Eye, Loader2, Plus, Trash2 } from 'lucide-react';
 import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
 import { valueOf } from '../../utils/customFields.js';
+import { MAX_ITEMS, blankItem } from '../../utils/items.js';
 import Modal from '../Modal.jsx';
 import { HoverCard } from '../ui.jsx';
 import InvoicePreview from './InvoicePreview.jsx';
 
-const required = new Set(['date_issued', 'invoice_number', 'client_name', 'product_service', 'amount']);
+const required = new Set(['date_issued', 'invoice_number', 'client_name', 'amount']);
 const hiddenPaidStatuses = new Set(['Pending', 'No', 'Cancelled']);
 
 const numericAmount = (value) => Number(String(value ?? '').replace(/,/g, ''));
@@ -35,6 +36,12 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   const star = (key) => required.has(key) ? <span className="ml-0.5 text-danger" aria-hidden="true">*</span> : <span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span>;
   const setCustom = (id, value) => setForm({ ...form, custom_fields: { ...(form.custom_fields || {}), [id]: value } });
   const cfStar = (f) => (f.required ? <span className="ml-0.5 text-danger" aria-hidden="true">*</span> : <span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span>);
+  // Products/services: any number of rows, each with a quantity.
+  const items = form.items?.length ? form.items : [{ ...blankItem(), product_service: form.product_service || '' }];
+  const setItems = (next) => setForm({ ...form, items: next });
+  const setItem = (i, patch) => setItems(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
+  const addItem = () => { const at = items.length; setItems([...items, blankItem()]); requestAnimationFrame(() => document.getElementById(`invoice-item-${at}-product`)?.focus()); };
+  const removeItem = (i) => setItems(items.filter((_, j) => j !== i));
   const cls = (key) => `input ${errs[key] ? 'input-error' : ''}`;
   const aria = (key) => ({ 'aria-invalid': Boolean(errs[key]), 'aria-describedby': errs[key] ? `invoice-${key}-error` : undefined });
 
@@ -121,16 +128,33 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
         </Group>
         <Group id="invoice-client-heading" title="Client & delivery" description="Who it is for and what was delivered.">
           {field('client_name', 'Client Name')}
-          <label className="label" htmlFor="invoice-product_service">
-            <span className="mb-1.5 block">Product/Service{star('product_service')}</span>
-            <select id="invoice-product_service" required {...aria('product_service')} className={cls('product_service')} value={form.product_service} onChange={set('product_service')}>
-              <option value="">{products.length ? 'Select a product or service' : 'No options configured'}</option>
-              {form.product_service && !products.some((item) => item.name === form.product_service) && <option value={form.product_service}>{form.product_service} (current)</option>}
-              {products.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
-            </select>
-            {error('product_service')}
-          </label>
           {field('delivery_date', 'Delivery Date', 'date')}
+          <fieldset className="sm:col-span-2" aria-describedby={errs.product_service ? 'invoice-product_service-error' : undefined}>
+            <legend className="label mb-1.5 block">Products/Services<span className="ml-0.5 text-danger" aria-hidden="true">*</span></legend>
+            <div className="space-y-2">
+              {items.map((it, i) => {
+                const pKey = `items_${i}_product_service`, qKey = `items_${i}_quantity`;
+                return (
+                  <div key={i}>
+                    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_2.25rem] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_2.25rem]">
+                      <select id={`invoice-item-${i}-product`} aria-label={`Product or service ${i + 1}`} required {...aria(pKey)} className={cls(pKey)} value={it.product_service} onChange={(e) => setItem(i, { product_service: e.target.value })}>
+                        <option value="">{products.length ? 'Select a product or service' : 'No options configured'}</option>
+                        {it.product_service && !products.some((p) => p.name === it.product_service) && <option value={it.product_service}>{it.product_service} (current)</option>}
+                        {products.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      </select>
+                      <input id={`invoice-item-${i}-quantity`} type="number" inputMode="decimal" min="0.001" step="any" required aria-label={`Quantity for item ${i + 1}`} placeholder="Qty" {...aria(qKey)} className={`${cls(qKey)} num text-right`} value={it.quantity} onChange={(e) => setItem(i, { quantity: e.target.value })} />
+                      {items.length > 1
+                        ? <button type="button" className="btn btn-secondary btn-icon" onClick={() => removeItem(i)} aria-label={`Remove item ${i + 1}`}><Trash2 size={16} aria-hidden="true" /></button>
+                        : <span aria-hidden="true" />}
+                    </div>
+                    {error(pKey)}{error(qKey)}
+                  </div>
+                );
+              })}
+            </div>
+            {error('product_service')}
+            <button type="button" className="btn btn-secondary mt-2.5" onClick={addItem} disabled={items.length >= MAX_ITEMS}><Plus size={15} aria-hidden="true" />Add Another</button>
+          </fieldset>
         </Group>
         <Group id="payment-heading" title="Payment" description="Amount billed, received and current payment state.">
           {amountField('amount', 'Invoice Amount', true)}

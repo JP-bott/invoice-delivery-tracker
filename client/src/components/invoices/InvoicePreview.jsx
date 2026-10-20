@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Printer } from 'lucide-react';
 import Modal from '../Modal.jsx';
+import { formatQty, itemsOf } from '../../utils/items.js';
 import './invoice-sheet.css';
 
 const ROWS = 14; // fits one A5 page once the sheet is rendered with real text
@@ -26,9 +27,13 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
   const vatable = type === 'vatable';
   const invoiceNo = invoice.invoice_no || `${invoice.invoice_prefix || ''}${invoice.invoice_number || ''}`;
   const amount = t.total ? money(t.total) : '';
-  const rows = Array.from({ length: ROWS }, () => ({ q: '', d: '', u: '', a: '' }));
-  if (invoice.product_service || t.total) rows[0] = { q: t.total ? '1' : '', d: invoice.product_service || '', u: amount, a: amount };
-  if (invoice.remarks) rows[1] = { q: '', d: invoice.remarks, u: '', a: '', sub: true };
+  // One row per product/service with its quantity. Only the invoice total is recorded, so the unit cost and
+  // amount are filled in when there is a single item; with several items they stay blank and the totals block carries the amount.
+  const items = itemsOf(invoice), single = items.length === 1;
+  const rows = items.map((it) => ({ q: formatQty(it.qty), d: it.name, u: single && t.total && it.qty ? money(Math.round(t.total / it.qty)) : '', a: single ? amount : '' }));
+  if (!rows.length && t.total) rows.push({ q: '', d: '', u: '', a: amount });
+  if (invoice.remarks) rows.push({ q: '', d: invoice.remarks, u: '', a: '', sub: true });
+  while (rows.length < ROWS) rows.push({ q: '', d: '', u: '', a: '' });
   return (
     <div className="inv-sheet" role="document" aria-label={`Service invoice ${invoiceNo}`}>
       <header>
@@ -72,6 +77,7 @@ export default function InvoicePreview({ invoice, onClose }) {
   const [zoom, setZoom] = useState(1);
   const wrap = useRef(null);
   const whtRate = useMemo(() => parseFloat(wht) || 0, [wht]);
+  const manyItems = itemsOf(invoice).length > 1;
 
   // Scale the A5 sheet down on narrow screens instead of scrolling sideways.
   useEffect(() => {
@@ -105,7 +111,7 @@ export default function InvoicePreview({ invoice, onClose }) {
         <span className="mr-auto" />
         <button type="button" data-autofocus className="btn btn-primary" onClick={print}><Printer size={15} aria-hidden="true" />Print</button>
       </>}>
-      <p className="text-xs text-fg-subtle" data-print-hide>Sale type and withholding tax only change this preview and are not saved with the invoice.</p>
+      <p className="text-xs text-fg-subtle" data-print-hide>Sale type and withholding tax only change this preview and are not saved with the invoice.{manyItems && ' With several items, the invoice amount is shown as the total only.'}</p>
       <div ref={wrap} className="-mx-5 overflow-x-hidden rounded-lg bg-surface-3 p-3 sm:mx-0" data-print-body>
         <div style={{ zoom }} className="inv-zoom"><InvoiceSheet invoice={invoice} type={type} whtRate={whtRate} /></div>
       </div>

@@ -12,8 +12,10 @@ import { useToast } from '../components/Toast.jsx';
 import { formatAmount } from '../utils/money.js';
 import { isCustomFilterKey } from '../utils/customFields.js';
 import { useInvoiceFields } from '../utils/useInvoiceFields.js';
+import { blankItem, itemsOf } from '../utils/items.js';
 
-const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', cr_no: '', client_name: '', product_service: '', due_date: '', amount: '', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '', custom_fields: {} };
+const newForm = () => ({ ...blank, items: [blankItem()], custom_fields: {} });
+const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', cr_no: '', client_name: '', items: [blankItem()], due_date: '', amount: '', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '', custom_fields: {} };
 const noFilters = { q: '', dateFrom: '', dateTo: '', client: '', product: '', paymentStatus: '', deliveryStatus: '' };
 // Built-in filters plus any custom-field filters in the URL (cf_<id>).
 const filtersFromParams = (params) => Object.fromEntries([...Object.keys(noFilters), ...[...params.keys()].filter(isCustomFilterKey)].map((key) => [key, params.get(key) || '']));
@@ -38,7 +40,7 @@ export default function Invoices() {
   // "Add Invoice" in the sidebar/topbar links here with ?new=1: open the form once and tidy the URL.
   useEffect(() => {
     if (!searchParams.get('new')) return;
-    reloadFields(); setForm({ ...blank }); setErrs({});
+    reloadFields(); setForm(newForm()); setErrs({});
     const next = new URLSearchParams(searchParams); next.delete('new'); setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, reloadFields]);
   useEffect(() => { const t = setTimeout(() => { setDq(f); setPage(1); }, 300); return () => clearTimeout(t); }, [f]);
@@ -64,8 +66,8 @@ export default function Invoices() {
     try { await api(`/api/invoices/${del.id}`, { method: 'DELETE' }); toast.success(`Invoice ${del.invoice_no} deleted`); load(); } catch (e) { toast.error(e.message); }
     setDeleting(false); setDel(null);
   };
-  const openAdd = () => { reloadFields(); setForm({ ...blank }); setErrs({}); };
-  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), amount: formatAmount(r.amount), amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', due_date: r.due_date ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); setErrs({}); };
+  const openAdd = () => { reloadFields(); setForm(newForm()); setErrs({}); };
+  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), amount: formatAmount(r.amount), amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', due_date: r.due_date ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', items: itemsOf(r).map((it) => ({ product_service: it.name, quantity: String(it.qty || 1) })), custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); setErrs({}); };
   const onSort = (k) => setSort({ sortBy: k, sortDir: sort.sortBy === k && sort.sortDir === 'asc' ? 'desc' : 'asc' });
   const clearFilters = () => { setF(noFilters); setSearchParams({}); };
   const filtered = Object.keys(dq).some((k) => dq[k]);
