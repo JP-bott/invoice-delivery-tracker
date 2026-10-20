@@ -4,7 +4,8 @@ import { validateInvoice } from './services/validate.js';
 import * as inv from './services/invoiceService.js';
 import * as products from './services/productService.js';
 import * as cf from './services/customFieldService.js';
-import { handlers } from './services/dashboardService.js';
+import { handlers, dashboard } from './services/dashboardService.js';
+import * as dashboardFilters from './services/dashboardFilterService.js';
 import { errorResponse, invalid, notFound } from './http.js';
 
 const ok = (body, status = 200) => ({ status, body });
@@ -52,6 +53,12 @@ async function route(method, seg, query, body) {
     }
     return null;
   }
+  if (area === 'dashboard-filters') {
+    if (a !== undefined || extra !== undefined) return null;
+    if (method === 'GET') return () => dashboardFilters.get().then(ok);
+    if (method === 'PUT') return () => dashboardFilters.save(body).then(ok);
+    return null;
+  }
   if (extra !== undefined) return null;
 
   if (area === 'invoices') {
@@ -74,7 +81,7 @@ async function route(method, seg, query, body) {
     if (method === 'DELETE') return async () => (id != null && await inv.remove(id) ? { status: 204 } : notFound());
     return null;
   }
-  if (area === 'dashboard' && method === 'GET' && a && Object.hasOwn(handlers, a)) return () => handlers[a](query).then(ok);
+  if (area === 'dashboard' && method === 'GET' && a && Object.hasOwn(handlers, a)) return () => dashboard(a, query).then(ok);
   if (area === 'filters' && method === 'GET' && a === 'clients') return () => inv.distinct('client_name').then(ok);
   if (area === 'filters' && method === 'GET' && a === 'products') return () => Promise.all([products.list(), inv.distinctProducts()]).then(([configured, used]) => ok([...new Set([...configured.map((p) => p.name), ...used])]));
   return null;

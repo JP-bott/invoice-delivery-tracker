@@ -2,8 +2,12 @@ import { getDb } from '../database/db.js';
 import { toPesos } from './money.js';
 import { buildWhere } from './filterBuilder.js';
 import { toApi } from './invoiceService.js';
+import { activeFields } from './customFieldService.js';
 
-const f = (q, cancelled = false) => buildWhere(q, { exact: true, excludeCancelled: !cancelled });
+// Active custom fields travel with the query under a symbol, so every handler's filters can include cf_<id> filters
+// without each one loading them (symbol keys survive object spread; they never reach the database).
+const FIELDS = Symbol('customFields');
+const f = (q, cancelled = false) => buildWhere(q, { exact: true, excludeCancelled: !cancelled, customFields: q[FIELDS] || [] });
 const run = async (sql, args) => (await getDb().execute({ sql, args })).rows;
 const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000) + 1;
 const datePart = (value) => String(value).slice(0, 10);
@@ -114,3 +118,8 @@ export const handlers = {
     return (await run(`SELECT * FROM invoices ${where} ORDER BY date_issued DESC, id DESC LIMIT 8`, args)).map(toApi);
   },
 };
+
+// Entry point used by the API: runs one handler with the active custom fields available for filtering.
+export async function dashboard(name, q) {
+  return handlers[name]({ ...q, [FIELDS]: await activeFields() });
+}

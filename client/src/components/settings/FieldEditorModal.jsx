@@ -10,7 +10,8 @@ export default function FieldEditorModal({ field, onClose, onSaved }) {
   const [label, setLabel] = useState(field?.label ?? ''), [type, setType] = useState(field?.input_type ?? 'text');
   const [required, setRequired] = useState(Boolean(field?.required)), [showInTable, setShowInTable] = useState(field?.show_in_table ?? true);
   const [options, setOptions] = useState(field?.options ?? []), [draft, setDraft] = useState('');
-  const [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const [error, setError] = useState(''), [busy, setBusy] = useState(false), [allOptions, setAllOptions] = useState(false);
+  const OPTION_LIMIT = 6;
   const types = allowedTypes(field);
   const locked = editing && types.length < FIELD_TYPES.length;
   const used = field?.value_count ?? 0;
@@ -19,7 +20,7 @@ export default function FieldEditorModal({ field, onClose, onSaved }) {
     const value = draft.trim();
     if (!value) return true;
     if (options.some((o) => o.trim().toLowerCase() === value.toLowerCase())) { setError(`"${value}" is already in the list.`); return false; }
-    setOptions([...options, value]); setDraft(''); setError(''); return true;
+    setOptions([...options, value]); if (options.length + 1 > OPTION_LIMIT) setAllOptions(true); setDraft(''); setError(''); return true;
   };
   const submit = async (event) => {
     event.preventDefault();
@@ -27,7 +28,7 @@ export default function FieldEditorModal({ field, onClose, onSaved }) {
     if (!label.trim()) { setError('Enter a field label.'); return; }
     const finalOptions = type === 'dropdown' ? [...options, ...(draft.trim() ? [draft.trim()] : [])] : [];
     const problem = type === 'dropdown' ? optionProblem(finalOptions) : '';
-    if (problem) { setError(problem); return; }
+    if (problem) { setAllOptions(true); setError(problem); return; }
     setBusy(true);
     try {
       const saved = await api(editing ? `/api/invoice-fields/${field.id}` : '/api/invoice-fields', {
@@ -60,11 +61,12 @@ export default function FieldEditorModal({ field, onClose, onSaved }) {
         {type === 'dropdown' && (
           <fieldset className="space-y-2">
             <legend className="label mb-1">Dropdown options</legend>
-            {options.length > 0 && <ul className="space-y-2">{options.map((option, i) => (
+            {options.length > 0 && <ul className="space-y-2">{options.map((option, i) => (!allOptions && i >= OPTION_LIMIT ? null : (
               <li key={i} className="flex gap-2">
                 <input className="input" aria-label={`Option ${i + 1}`} value={option} maxLength={100} onChange={(e) => setOptions(options.map((o, j) => (j === i ? e.target.value : o)))} />
                 <button type="button" className="btn btn-ghost btn-icon !h-9 !w-9 shrink-0 hover:!bg-danger-soft hover:!text-danger-ink" onClick={() => setOptions(options.filter((_, j) => j !== i))} aria-label={`Remove option ${option || i + 1}`} title="Remove"><X size={15} /></button>
-              </li>))}</ul>}
+              </li>)))}</ul>}
+            {options.length > OPTION_LIMIT && <button type="button" className="inline-flex items-center gap-1 rounded text-xs font-medium text-brand-ink hover:underline" aria-expanded={allOptions} onClick={() => setAllOptions((o) => !o)}>{allOptions ? 'Show fewer options' : `Expand Options (${options.length - OPTION_LIMIT} more)`}</button>}
             <div className="flex gap-2">
               <input className="input" aria-label="New option" value={draft} maxLength={100} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption(); } }} placeholder="Type an option, press Enter" />
               <button type="button" className="btn btn-secondary shrink-0" onClick={addOption}><Plus size={15} aria-hidden="true" />Add</button>

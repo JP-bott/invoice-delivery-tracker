@@ -10,6 +10,31 @@ import { StatusChart, TopClientsChart, TopProductsChart, TrendChart } from '../c
 import DashboardAnalytics from '../components/dashboard/DashboardAnalytics.jsx';
 import { PageHeader, Skeleton } from '../components/ui.jsx';
 
+// Used only if the filter settings can't be loaded: the two filters the dashboard has always had.
+const FALLBACK_FILTERS = [
+  { key: 'client', label: 'Client', aria_label: 'Client', control: 'select', source: 'clients', all_label: 'All clients', enabled: true },
+  { key: 'product', label: 'Product/Service', aria_label: 'Product or service', control: 'select', source: 'products', all_label: 'All products', enabled: true },
+];
+const sameValues = (a, b) => [...new Set([...Object.keys(a), ...Object.keys(b)])].every((k) => (a[k] || '') === (b[k] || ''));
+const selectList = (def, opts) => (def.source ? (opts[def.source] || []).map((v) => ({ value: v, label: v })) : def.options || []);
+
+// One filter chosen in Settings > Dashboard filters. Selects and dates apply at once; text and numbers wait for a pause in typing.
+function FilterControl({ def, value, opts, onChange }) {
+  const cls = 'input !w-auto max-w-[12rem]';
+  if (def.control === 'select') {
+    const list = selectList(def, opts);
+    return (
+      <select aria-label={def.aria_label || def.label} className={cls} value={value} onChange={(e) => onChange(e.target.value, true)}>
+        <option value="">{def.all_label}</option>
+        {value && !list.some((o) => o.value === value) && <option value={value}>{value}</option>}
+        {list.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    );
+  }
+  const type = def.control === 'date' ? 'date' : def.control === 'number' ? 'number' : 'text';
+  return <input aria-label={def.aria_label || def.label} type={type} step={type === 'number' ? 'any' : undefined} placeholder={def.control === 'text' ? `${def.label} contains…` : def.label} className={cls} value={value} onChange={(e) => onChange(e.target.value, type === 'date')} />;
+}
+
 const ENDPOINTS = ['summary', 'invoice-trends', 'payment-distribution', 'analytics', 'top-clients', 'top-products', 'delivery-summary', 'recent-invoices'];
 
 function DashboardSkeleton() {
@@ -26,34 +51,47 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [preset, setPreset] = useState('month');
   const [customFrom, setCustomFrom] = useState(''), [customTo, setCustomTo] = useState('');
-  const [client, setClient] = useState(''), [product, setProduct] = useState('');
+  const [filterDefs, setFilterDefs] = useState(null); // filters enabled in Settings (null until loaded)
+  const [values, setValues] = useState({}), [applied, setApplied] = useState({}); // what the controls show / what the charts use
   const [opts, setOpts] = useState({ clients: [], products: [] });
   const [d, setD] = useState(null), [loading, setLoading] = useState(true), [err, setErr] = useState('');
   const [tick, setTick] = useState(0);
 
   useEffect(() => { Promise.all([api('/api/filters/clients'), api('/api/filters/products')]).then(([clients, products]) => setOpts({ clients, products })).catch(() => {}); }, [tick]);
+  useEffect(() => { api('/api/dashboard-filters').then((r) => setFilterDefs(r.filters.filter((x) => x.enabled))).catch(() => setFilterDefs(FALLBACK_FILTERS)); }, [tick]);
+  useEffect(() => { const t = setTimeout(() => setApplied((prev) => (sameValues(prev, values) ? prev : values)), 300); return () => clearTimeout(t); }, [values]);
+  const shownDefs = useMemo(() => filterDefs || [], [filterDefs]);
+  // Only filters that are currently enabled are applied; a value left over from a filter turned off in Settings is ignored.
+  const active = useMemo(() => Object.fromEntries(shownDefs.map((x) => [x.key, String(applied[x.key] ?? '').trim()]).filter(([, v]) => v)), [shownDefs, applied]);
+  const activeKey = qs(active);
+  const setValue = (key, value, now) => { const next = { ...values, [key]: value }; setValues(next); if (now) setApplied(next); };
   useEffect(() => {
     const reportRange = preset === 'custom' ? { dateFrom: customFrom, dateTo: customTo } : range(preset);
-    const q = qs({ ...reportRange, client, product });
+    const q = qs({ ...reportRange, ...active });
     let live = true;
     setLoading(true);
     // KPI counts are "as of now": same client/product filters, but never limited by the date range.
-    Promise.all([...ENDPOINTS.map((n) => api(`/api/dashboard/${n}?${q}`)), api(`/api/dashboard/summary?${qs({ client, product })}`)])
+    Promise.all([...ENDPOINTS.map((n) => api(`/api/dashboard/${n}?${q}`)), api(`/api/dashboard/summary?${qs(active)}`)])
       .then(([summary, trends, dist, analytics, clients, products, delivery, recent, now]) => { if (live) { setD({ summary, now, trends, dist, analytics, clients, products, delivery, recent }); setErr(''); } })
       .catch((e) => live && setErr(e.message)).finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, [preset, customFrom, customTo, client, product, tick]);
+  }, [preset, customFrom, customTo, activeKey, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reportRange = preset === 'custom' ? { dateFrom: customFrom, dateTo: customTo } : range(preset);
-  const openNow = (extra = {}) => navigate(`/invoices?${qs({ client, product, ...extra })}`);
+  const openNow = (extra = {}) => navigate(`/invoices?${qs({ ...active, ...extra })}`);
   const label = PRESETS.find(([v]) => v === preset)?.[1];
   const periodLabel = useMemo(() => (reportRange.dateFrom && reportRange.dateTo ? `${reportRange.dateFrom} to ${reportRange.dateTo}` : preset === 'all' ? 'All time' : 'Choose a start and end date'), [reportRange.dateFrom, reportRange.dateTo, preset]); // eslint-disable-line react-hooks/exhaustive-deps
-  const dirty = preset !== 'month' || client || product;
-  const clear = () => { setPreset('month'); setCustomFrom(''); setCustomTo(''); setClient(''); setProduct(''); };
+  const dirty = preset !== 'month' || shownDefs.some((x) => values[x.key]);
+  const clear = () => { setPreset('month'); setCustomFrom(''); setCustomTo(''); setValues({}); setApplied({}); };
+  // "Financial overview · This Month · Acme · Cement": client and product by name, other filters as "Label: value".
+  const filterSummary = shownDefs.filter((x) => active[x.key]).map((x) => {
+    const v = x.control === 'select' ? selectList(x, opts).find((o) => o.value === active[x.key])?.label ?? active[x.key] : active[x.key];
+    return x.key === 'client' || x.key === 'product' ? v : `${x.label}: ${v}`;
+  });
 
   return (
     <div>
-      <PageHeader title="Dashboard" description={`Financial overview · ${label}${client ? ` · ${client}` : ''}${product ? ` · ${product}` : ''}`}
+      <PageHeader title="Dashboard" description={['Financial overview', label, ...filterSummary].join(' · ')}
         actions={<>
           <button type="button" className="btn btn-secondary" onClick={() => setTick((t) => t + 1)} disabled={loading} aria-label="Refresh data"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} aria-hidden="true" /><span className="hidden sm:inline">Refresh</span></button>
         </>} />
@@ -61,8 +99,7 @@ export default function Dashboard() {
       <div role="group" aria-label="Dashboard filters" className="mb-5 flex flex-wrap items-center gap-2">
         <select aria-label="Date range" className="input !w-auto" value={preset} onChange={(e) => setPreset(e.target.value)}>{PRESETS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         {preset === 'custom' && <><input aria-label="Custom start date" type="date" className="input !w-auto" value={customFrom} max={customTo || undefined} onChange={(e) => setCustomFrom(e.target.value)} /><span className="text-fg-subtle" aria-hidden="true">–</span><input aria-label="Custom end date" type="date" className="input !w-auto" value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)} /></>}
-        <select aria-label="Client" className="input !w-auto max-w-[12rem]" value={client} onChange={(e) => setClient(e.target.value)}><option value="">All clients</option>{opts.clients.map((c) => <option key={c}>{c}</option>)}</select>
-        <select aria-label="Product or service" className="input !w-auto max-w-[12rem]" value={product} onChange={(e) => setProduct(e.target.value)}><option value="">All products</option>{opts.products.map((c) => <option key={c}>{c}</option>)}</select>
+        {shownDefs.map((x) => <FilterControl key={x.key} def={x} value={values[x.key] ?? ''} opts={opts} onChange={(v, now) => setValue(x.key, v, now)} />)}
         {dirty && <button type="button" className="btn btn-ghost" onClick={clear}><X size={14} aria-hidden="true" />Clear</button>}
       </div>
 

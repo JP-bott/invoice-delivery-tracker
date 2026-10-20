@@ -11,7 +11,8 @@ export function buildWhere(q = {}, { exact = false, excludeCancelled = false, cu
   if (str(q.dateTo)) { w.push('date_issued <= ?'); a.push(q.dateTo); }
   for (const [k, col] of [['client', 'client_name'], ['product', 'product_service']]) {
     if (!str(q[k])) continue;
-    if (exact) { w.push(`${col} = ?`); a.push(q[k].trim()); }
+    if (exact && k === 'product') { w.push(`(product_service = ? OR EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.invoice_id = invoices.id AND ii.product_service = ?))`); a.push(q[k].trim(), q[k].trim()); } // invoices with several products match on any of them
+    else if (exact) { w.push(`${col} = ?`); a.push(q[k].trim()); }
     else { w.push(`${col} LIKE ? ESCAPE '\\'`); a.push(like(q[k].trim())); }
   }
   if (q.paymentStatus === 'unpaid') w.push("payment_status IN ('Pending','Partially Paid')");

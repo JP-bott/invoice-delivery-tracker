@@ -6,6 +6,7 @@ import { useToast } from '../Toast.jsx';
 import Modal from '../Modal.jsx';
 import { EmptyState, Skeleton } from '../ui.jsx';
 import FieldEditorModal from './FieldEditorModal.jsx';
+import { ExpandableList, OptionChips } from './Expandable.jsx';
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -33,16 +34,16 @@ export default function InvoiceFieldsSection() {
   const iconBtn = 'btn btn-ghost btn-icon !h-8 !w-8';
 
   return (
-    <section className="card card-pad mt-6" aria-labelledby="fields-heading">
+    <section className="card card-pad" aria-labelledby="fields-heading">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div><h2 id="fields-heading" className="section-title">Invoice fields</h2><p className="mt-1 text-sm text-fg-muted">Extra fields for the Add and Edit Invoice forms. Values are saved with each invoice and are searchable and filterable.</p></div>
+        <div><h3 id="fields-heading" className="section-title">Invoice fields</h3><p className="mt-1 text-sm text-fg-muted">Extra fields for the Add and Edit Invoice forms. Values are saved with each invoice and are searchable and filterable.</p></div>
         <button type="button" className="btn btn-primary" onClick={() => setEditor({})}><Plus size={16} aria-hidden="true" />Add Field</button>
       </div>
       {error && <p role="alert" className="mb-3 text-sm text-danger-ink">{error}</p>}
       <div className="border-t border-line">
         {loading ? <div className="space-y-2 py-4"><Skeleton className="h-10" /><Skeleton className="h-10" /></div>
           : !active.length ? <EmptyState compact icon={SlidersHorizontal} title="No custom fields yet" description="Add a field such as PO Number, Region or Rush order." />
-          : <ul className="divide-y divide-line">{active.map((f, i) => (
+          : <ExpandableList className="divide-y divide-line" items={active} limit={6} render={(f, i) => (
             <li key={f.id} className="flex items-center justify-between gap-3 py-3">
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-fg">{f.label}
@@ -50,7 +51,7 @@ export default function InvoiceFieldsSection() {
                   {f.required && <span className="badge badge-warning">Required</span>}
                   {!f.show_in_table && <span className="badge badge-neutral">Not in list</span>}
                 </p>
-                {f.input_type === 'dropdown' && <p className="mt-0.5 truncate text-xs text-fg-muted" title={f.options.join(', ')}>Options: {f.options.join(', ')}</p>}
+                {f.input_type === 'dropdown' && <OptionChips options={f.options} limit={4} />}
               </div>
               <span className="flex shrink-0 gap-1">
                 <button type="button" className={iconBtn} onClick={() => move(i, -1)} disabled={busy || i === 0} aria-label={`Move ${f.label} up`} title="Move up"><ChevronUp size={15} /></button>
@@ -58,7 +59,7 @@ export default function InvoiceFieldsSection() {
                 <button type="button" className={iconBtn} onClick={() => setEditor(f)} aria-label={`Edit ${f.label}`} title="Edit"><Pencil size={15} /></button>
                 <button type="button" className={`${iconBtn} hover:!bg-danger-soft hover:!text-danger-ink`} onClick={() => setConfirm({ kind: 'archive', field: f })} aria-label={`Delete ${f.label}`} title="Delete"><Trash2 size={15} /></button>
               </span>
-            </li>))}</ul>}
+            </li>)} />}
       </div>
       {archived.length > 0 && (
         <details className="mt-4 border-t border-line pt-3">

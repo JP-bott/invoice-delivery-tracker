@@ -8,7 +8,7 @@ export default function ChartCard({ title, description, data, action, className 
         <div className="min-w-0"><h2 className="section-title">{title}</h2>{description && <p className="mt-0.5 text-xs text-fg-muted">{description}</p>}</div>
         {action}
       </div>
-      {data?.length ? children : <EmptyState compact icon={BarChart3} title="No data for these filters" description="Try a wider date range or clear the client and product filters." />}
+      {data?.length ? children : <EmptyState compact icon={BarChart3} title="No data for these filters" description="Try a wider date range or clear the filters." />}
     </section>
   );
 }
