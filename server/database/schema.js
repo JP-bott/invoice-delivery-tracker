@@ -65,6 +65,23 @@ export const ITEM_STATEMENTS = [
 // costs existed: those invoices keep their stored amount and are read as before.
 export const ITEM_PRICING_COLUMNS = ['unit_cost_centavos', 'amount_centavos'];
 
+// Registered clients (Settings > Clients) that the Add Invoice form can suggest. migrations/005_clients.sql mirrors this and
+// INVOICE_CLIENT_COLUMNS; a test keeps them in sync. An invoice never points at a client row: it keeps its own copy of the
+// name, TIN and address (the snapshot taken when it was saved), so renaming or deleting a client never rewrites issued invoices.
+export const CLIENT_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS clients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    tin TEXT,
+    address TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL)`,
+];
+
+// Client details saved with each invoice. Added to invoices with ALTER TABLE ADD COLUMN (initSchema skips any that exist), so the
+// 001 table and its rows are untouched. NULL means the invoice was saved before clients existed or without a registered client.
+export const INVOICE_CLIENT_COLUMNS = ['client_tin', 'client_address'];
+
 export const INVOICE_COLUMNS = [
   'id', 'date_issued', 'invoice_no', 'cr_no', 'client_name', 'product_service', 'due_date',
   'amount_centavos', 'amount_paid_centavos', 'payment_status', 'delivery_date', 'remarks', 'created_at', 'updated_at',

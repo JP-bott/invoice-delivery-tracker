@@ -3,6 +3,7 @@ import { ensureSchema } from './database/db.js';
 import { validateInvoice } from './services/validate.js';
 import * as inv from './services/invoiceService.js';
 import * as products from './services/productService.js';
+import * as clients from './services/clientService.js';
 import * as cf from './services/customFieldService.js';
 import { handlers, dashboard } from './services/dashboardService.js';
 import * as dashboardFilters from './services/dashboardFilterService.js';
@@ -14,7 +15,7 @@ const idOf = (s) => (/^\d+$/.test(s) ? Number(s) : null);
 // Built-in field validation plus the active custom fields (existing values let an unchanged legacy value stay valid).
 async function checked(body, id) {
   const current = id == null ? null : await inv.get(id); // an unchanged stored invoice number (even an older format) is kept as is
-  const { errors, value } = validateInvoice(body, { existingInvoiceNo: current?.invoice_no });
+  const { errors, value } = validateInvoice(body, { existingInvoiceNo: current?.invoice_no, existing: current }); // existing: saved client TIN/address survive a request that omits them
   const [fields, existing] = await Promise.all([cf.activeFields(), id == null ? {} : cf.valuesFor(id)]);
   const custom = cf.validateValues(body?.custom_fields, fields, existing);
   return { errors: { ...errors, ...custom.errors }, value, writes: custom.writes };
@@ -33,6 +34,18 @@ async function route(method, seg, query, body) {
       const id = idOf(a);
       if (method === 'PUT') return () => products.update(id, body).then((r) => (r ? ok(r) : notFound('Product/service option not found')));
       if (method === 'DELETE') return () => products.remove(id).then((r) => (r ? { status: 204 } : notFound('Product/service option not found')));
+    }
+    return null;
+  }
+  if (area === 'clients') {
+    if (a === undefined && extra === undefined) {
+      if (method === 'GET') return () => clients.list().then(ok);
+      if (method === 'POST') return () => clients.create(body).then((r) => ok(r, 201));
+    }
+    if (extra === undefined && a !== undefined) {
+      const id = idOf(a);
+      if (method === 'PUT') return () => clients.update(id, body).then((r) => (r ? ok(r) : notFound('Client not found')));
+      if (method === 'DELETE') return () => clients.remove(id).then((r) => (r ? { status: 204 } : notFound('Client not found')));
     }
     return null;
   }

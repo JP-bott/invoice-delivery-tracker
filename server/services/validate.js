@@ -28,7 +28,21 @@ function cleanItems(b, e, t) {
   return { items, amount: priced.ok ? priced.subtotal : null };
 }
 
+// Client TIN / address are a copy of the registered client's details taken when the invoice is saved. A request that leaves the
+// key out (an older client, a script) keeps what the invoice already has; sending an empty string clears it.
+export const CLIENT_TIN_MAX = 30, CLIENT_ADDRESS_MAX = 300;
+function cleanClientDetails(b, e, existing) {
+  const one = (key, max, label) => {
+    if (b[key] === undefined) return existing?.[key] ?? null;
+    const text = typeof b[key] === 'string' ? b[key].replace(/\s+/g, ' ').trim() : '';
+    if (text.length > max) e[key] = `${label} must be ${max} characters or fewer`;
+    return text || null;
+  };
+  return { client_tin: one('client_tin', CLIENT_TIN_MAX, 'TIN'), client_address: one('client_address', CLIENT_ADDRESS_MAX, 'Address') };
+}
+
 // ctx.existingInvoiceNo: on update, an unchanged stored number (including older ones like "VI00123") is kept as it is.
+// ctx.existing: the stored invoice on update (supplies the client TIN/address when the request omits them).
 export function validateInvoice(b = {}, ctx = {}) {
   const e = {}, t = (x) => (typeof x === 'string' ? x.trim() : '');
   const v = {
@@ -41,6 +55,7 @@ export function validateInvoice(b = {}, ctx = {}) {
   if (ctx.existingInvoiceNo && typedNo === ctx.existingInvoiceNo) v.invoice_no = typedNo;
   else { const n = normalizeInvoiceNo(b.invoice_no, b.invoice_prefix); if (n.error) e.invoice_no = n.error; else v.invoice_no = n.value; }
   if (!v.client_name) e.client_name = 'Required';
+  Object.assign(v, cleanClientDetails(b, e, ctx.existing));
   const priced = cleanItems(b, e, t);
   v.items = priced.items;
   v.product_service = v.items.map((it) => it.product_service).filter(Boolean).join(', ');

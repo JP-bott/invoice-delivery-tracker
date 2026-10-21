@@ -4,6 +4,7 @@ import { api } from '../utils/api.js';
 import { useToast } from '../components/Toast.jsx';
 import Modal from '../components/Modal.jsx';
 import { EmptyState, PageHeader, Skeleton } from '../components/ui.jsx';
+import ClientsSection from '../components/settings/ClientsSection.jsx';
 import InvoiceFieldsSection from '../components/settings/InvoiceFieldsSection.jsx';
 import DashboardFiltersSection from '../components/settings/DashboardFiltersSection.jsx';
 import { ExpandableList } from '../components/settings/Expandable.jsx';
@@ -54,6 +55,7 @@ export default function Settings() {
       <PageHeader title="Settings" description="Configure the Add Invoice form and the dashboard filters." />
       <div className="grid items-start gap-5 lg:grid-cols-2">
       <SettingsGroup id="group-form" tone="brand" icon={FilePlus2} eyebrow="Add Invoice form" title="Invoice form" description="What people can pick and fill in when they add or edit an invoice.">
+      <ClientsSection />
       <section className="card card-pad" aria-labelledby="products-heading">
         <div className="mb-4"><h3 id="products-heading" className="section-title">Product/Service options</h3><p className="mt-1 text-sm text-fg-muted">These options appear in the Add and Edit Invoice forms.</p></div>
         <form onSubmit={save} className="flex flex-col gap-2 sm:flex-row">

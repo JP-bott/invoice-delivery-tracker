@@ -1,5 +1,5 @@
 export class HttpError extends Error {
-  constructor(status, message, code) { super(message); this.status = status; this.code = code; }
+  constructor(status, message, code, fields) { super(message); this.status = status; this.code = code; this.fields = fields; }
 }
 const DUP = { error: { code: 'DUPLICATE', message: 'Value already exists' } };
 
@@ -14,7 +14,7 @@ export function errorResponse(e) {
   const status = e.status || 500;
   const code = e.code && status !== 500 ? e.code : status === 400 ? 'BAD_REQUEST' : 'SERVER_ERROR';
   if (status === 500) console.error(e);
-  return { status, body: { error: { code, message: status === 500 ? 'Internal error' : e.message } } };
+  return { status, body: { error: { code, message: status === 500 ? 'Internal error' : e.message, ...(status !== 500 && e.fields && { fields: e.fields }) } } };
 }
 export const fail = (status, code, message, fields) => ({ status, body: { error: { code, message, ...(fields && { fields }) } } });
 export const invalid = (fields) => fail(422, 'VALIDATION_ERROR', 'Validation failed', fields);

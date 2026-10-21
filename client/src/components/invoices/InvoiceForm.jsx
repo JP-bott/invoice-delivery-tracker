@@ -9,6 +9,7 @@ import { invoiceNoFor } from '../../utils/invoiceNo.js';
 import Modal from '../Modal.jsx';
 import { HoverCard } from '../ui.jsx';
 import InvoicePreview from './InvoicePreview.jsx';
+import ClientCombobox from './ClientCombobox.jsx';
 
 const required = new Set(['date_issued', 'invoice_number', 'client_name']);
 const PREFIXES = ['SVI', 'SI'];
@@ -27,7 +28,7 @@ function Group({ id, title, description, children }) {
   );
 }
 
-export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, products = [], fields = [], saving = false }) {
+export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, products = [], clients = [], fields = [], saving = false }) {
   const [preview, setPreview] = useState(false);
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
   const setInvoicePart = (key) => (event) => setForm({ ...form, [key]: event.target.value });
@@ -131,7 +132,12 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
           {field('due_date', 'Due Date', 'date')}
         </Group>
         <Group id="invoice-client-heading" title="Client & delivery" description="Who it is for and what was delivered.">
-          {field('client_name', 'Client Name')}
+          <div className="label">
+            <label htmlFor="invoice-client_name" className="mb-1.5 block">Client Name{star('client_name')}</label>
+            <ClientCombobox id="invoice-client_name" value={form.client_name} tin={form.client_tin ?? ''} address={form.client_address ?? ''} clients={clients} invalid={Boolean(errs.client_name)}
+              describedBy={errs.client_name ? 'invoice-client_name-error' : undefined} onChange={(patch) => setForm({ ...form, ...patch })} />
+            {error('client_name')}
+          </div>
           {field('delivery_date', 'Delivery Date', 'date')}
           <fieldset className="sm:col-span-2" aria-describedby={errs.product_service ? 'invoice-product_service-error' : undefined}>
             <legend className="label mb-1.5 block">Products/Services<span className="ml-0.5 text-danger" aria-hidden="true">*</span></legend>

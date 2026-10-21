@@ -16,7 +16,7 @@ import { blankItem, deriveUnitCost } from '../utils/items.js';
 import { invoiceNoFor, splitInvoiceNo } from '../utils/invoiceNo.js';
 
 const newForm = () => ({ ...blank, items: [blankItem()], custom_fields: {} });
-const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', cr_no: '', client_name: '', items: [blankItem()], due_date: '', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '', custom_fields: {} };
+const blank = { date_issued: '', invoice_no: '', invoice_prefix: 'SVI', invoice_number: '', cr_no: '', client_name: '', client_tin: '', client_address: '', items: [blankItem()], due_date: '', payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '', custom_fields: {} };
 const noFilters = { q: '', dateFrom: '', dateTo: '', client: '', product: '', paymentStatus: '', deliveryStatus: '' };
 // Built-in filters plus any custom-field filters in the URL (cf_<id>).
 const filtersFromParams = (params) => Object.fromEntries([...Object.keys(noFilters), ...[...params.keys()].filter(isCustomFilterKey)].map((key) => [key, params.get(key) || '']));
@@ -33,20 +33,23 @@ export default function Invoices() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [f, setF] = useState(() => filtersFromParams(searchParams)), [dq, setDq] = useState(() => filtersFromParams(searchParams));
   const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(10), [sort, setSort] = useState({ sortBy: 'date_issued', sortDir: 'desc' });
-  const [res, setRes] = useState({ data: [], total: 0 }), [loading, setLoading] = useState(true), [products, setProducts] = useState([]);
+  const [res, setRes] = useState({ data: [], total: 0 }), [loading, setLoading] = useState(true), [products, setProducts] = useState([]), [clients, setClients] = useState([]);
   const [form, setForm] = useState(null), [errs, setErrs] = useState({}), [del, setDel] = useState(null);
   const [preview, setPreview] = useState(null);
   const onFieldsError = useCallback((e) => toast.error(`Could not load custom fields: ${e.message}`), [toast]);
   const { fields, reload: reloadFields } = useInvoiceFields(onFieldsError);
   const [saving, setSaving] = useState(false), [deleting, setDeleting] = useState(false);
 
+  // Registered clients feed the Client autocomplete; refreshed whenever the form opens so Settings changes show up.
+  const loadClients = useCallback(() => api('/api/clients').then(setClients).catch((e) => toast.error(`Could not load clients: ${e.message}`)), [toast]);
+  useEffect(() => { loadClients(); }, [loadClients]);
   useEffect(() => { const next = filtersFromParams(searchParams); setF(next); setDq(next); setPage(1); }, [searchParams]);
   // "Add Invoice" in the sidebar/topbar links here with ?new=1: open the form once and tidy the URL.
   useEffect(() => {
     if (!searchParams.get('new')) return;
-    reloadFields(); setForm(newForm()); setErrs({});
+    reloadFields(); loadClients(); setForm(newForm()); setErrs({});
     const next = new URLSearchParams(searchParams); next.delete('new'); setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams, reloadFields]);
+  }, [searchParams, setSearchParams, reloadFields, loadClients]);
   useEffect(() => { const t = setTimeout(() => { setDq(f); setPage(1); }, 300); return () => clearTimeout(t); }, [f]);
   useEffect(() => { api('/api/products').then(setProducts).catch((e) => toast.error(e.message)); }, [toast]);
   const load = useCallback(() => {
@@ -73,8 +76,8 @@ export default function Invoices() {
     try { await api(`/api/invoices/${del.id}`, { method: 'DELETE' }); toast.success(`Invoice ${del.invoice_no} deleted`); load(); } catch (e) { toast.error(e.message); }
     setDeleting(false); setDel(null);
   };
-  const openAdd = () => { reloadFields(); setForm(newForm()); setErrs({}); };
-  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), original_invoice_no: r.invoice_no, amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', due_date: r.due_date ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', items: editItems(r), custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); setErrs({}); };
+  const openAdd = () => { reloadFields(); loadClients(); setForm(newForm()); setErrs({}); };
+  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), original_invoice_no: r.invoice_no, amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', client_tin: r.client_tin ?? '', client_address: r.client_address ?? '', due_date: r.due_date ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', items: editItems(r), custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); loadClients(); setErrs({}); };
   const onSort = (k) => setSort({ sortBy: k, sortDir: sort.sortBy === k && sort.sortDir === 'asc' ? 'desc' : 'asc' });
   const clearFilters = () => { setF(noFilters); setSearchParams({}); };
   const filtered = Object.keys(dq).some((k) => dq[k]);
@@ -86,7 +89,7 @@ export default function Invoices() {
         onSortField={(k) => setSort({ ...sort, sortBy: k })} onSortDir={() => setSort({ ...sort, sortDir: sort.sortDir === 'asc' ? 'desc' : 'asc' })} />
       <InvoiceTable fields={fields} rows={res.data} loading={loading} sort={sort} onSort={onSort} onEdit={openEdit} onDelete={setDel} onPreview={(r) => setPreview({ ...r, amount: formatAmount(r.amount) })} filtered={filtered} onClear={clearFilters} onAdd={openAdd} />
       <Pagination total={res.total} page={page} pageSize={pageSize} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} />
-      {form && <InvoiceForm form={form} setForm={setForm} errs={errs} products={products} fields={fields} saving={saving} onSave={save} onCancel={() => !saving && setForm(null)} />}
+      {form && <InvoiceForm form={form} setForm={setForm} errs={errs} products={products} clients={clients} fields={fields} saving={saving} onSave={save} onCancel={() => !saving && setForm(null)} />}
       {preview && <InvoicePreview invoice={preview} onClose={() => setPreview(null)} />}
       {del && <DeleteDialog invoice={del} busy={deleting} onConfirm={confirmDelete} onCancel={() => !deleting && setDel(null)} />}
     </div>

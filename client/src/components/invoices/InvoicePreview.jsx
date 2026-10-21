@@ -33,9 +33,9 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
       </div>
       <table className="info"><tbody>
         <tr><td colSpan="2"><div className="cell">Billed to: <span className="v">{invoice.client_name}</span></div></td><td className="r"><div className="cell">Date: <span className="v">{longDate(invoice.date_issued)}</span></div></td></tr>
-        <tr><td colSpan="2"><div className="cell">Address: <span className="v" /></div></td><td className="r"><div className="cell">Terms: <span className="v">{invoice.due_date ? `Due ${longDate(invoice.due_date)}` : ''}</span></div></td></tr>
-        <tr><td colSpan="2"><div className="cell">&nbsp;</div></td><td className="r"><div className="cell">P.O. No.: <span className="v" /></div></td></tr>
-        <tr><td colSpan="3"><div className="cell">TIN: <span className="v" /></div></td></tr>
+        <tr><td colSpan="2" rowSpan="2"><div className="cell addr">Address: <span className="v">{invoice.client_address || ''}</span></div></td><td className="r"><div className="cell">Terms: <span className="v">{invoice.due_date ? `Due ${longDate(invoice.due_date)}` : ''}</span></div></td></tr>
+        <tr><td className="r"><div className="cell">P.O. No.: <span className="v" /></div></td></tr>
+        <tr><td colSpan="3"><div className="cell">TIN: <span className="v">{invoice.client_tin || ''}</span></div></td></tr>
       </tbody></table>
       <table className="items">
         <thead><tr><th className="qty">QTY.</th><th>NATURE OF SERVICE</th><th className="unit">UNIT<br />COST</th><th className="amt">AMOUNT</th></tr></thead>

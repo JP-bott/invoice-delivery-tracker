@@ -8,7 +8,8 @@ const SORTS = { date_issued: 'date_issued', invoice_no: 'invoice_no', cr_no: 'cr
 
 export const toApi = (r) => ({
   id: Number(r.id), date_issued: r.date_issued, invoice_no: r.invoice_no, cr_no: r.cr_no,
-  client_name: r.client_name, product_service: r.product_service, due_date: r.due_date,
+  client_name: r.client_name, client_tin: r.client_tin ?? null, client_address: r.client_address ?? null,
+  product_service: r.product_service, due_date: r.due_date,
   amount: toPesos(r.amount_centavos), amount_paid: toPesos(r.amount_paid_centavos),
   outstanding: toPesos(Math.max(r.amount_centavos - r.amount_paid_centavos, 0)),
   payment_status: r.payment_status, delivery_date: r.delivery_date,
@@ -61,16 +62,16 @@ export async function get(id) {
   const r = (await getDb().execute({ sql: 'SELECT * FROM invoices WHERE id = ?', args: [id] })).rows[0];
   return r ? (await withItems(await withCustom([toApi(r)], await activeFields())))[0] : null;
 }
-const cols = (v) => [v.date_issued, v.invoice_no, v.cr_no, v.client_name, v.product_service, v.due_date, v.amount_centavos, v.amount_paid_centavos, v.payment_status, v.delivery_date, v.remarks];
+const cols = (v) => [v.date_issued, v.invoice_no, v.cr_no, v.client_name, v.client_tin, v.client_address, v.product_service, v.due_date, v.amount_centavos, v.amount_paid_centavos, v.payment_status, v.delivery_date, v.remarks];
 const itemStatements = (items, ref) => items.map((it, i) => ({ sql: `INSERT INTO invoice_items (invoice_id, position, product_service, quantity, unit_cost_centavos, amount_centavos) SELECT id, ?, ?, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [i, it.product_service, it.quantity, it.unit_cost_centavos, it.amount_centavos, ...ref.args] }));
 // writes: validated custom values (see customFieldService.validateValues). Invoice and values commit together.
 export async function create(v, writes = []) {
   const now = new Date().toISOString();
-  const [r] = await getDb().batch([{ sql: `INSERT INTO invoices (date_issued,invoice_no,cr_no,client_name,product_service,due_date,amount_centavos,amount_paid_centavos,payment_status,delivery_date,remarks,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, args: [...cols(v), now, now] }, ...itemStatements(v.items, refByNumber(v.invoice_no)), ...valueStatements(writes, refByNumber(v.invoice_no))], 'write');
+  const [r] = await getDb().batch([{ sql: `INSERT INTO invoices (date_issued,invoice_no,cr_no,client_name,client_tin,client_address,product_service,due_date,amount_centavos,amount_paid_centavos,payment_status,delivery_date,remarks,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, args: [...cols(v), now, now] }, ...itemStatements(v.items, refByNumber(v.invoice_no)), ...valueStatements(writes, refByNumber(v.invoice_no))], 'write');
   return get(Number(r.lastInsertRowid));
 }
 export async function update(id, v, writes = []) {
-  const [r] = await getDb().batch([{ sql: `UPDATE invoices SET date_issued=?,invoice_no=?,cr_no=?,client_name=?,product_service=?,due_date=?,amount_centavos=?,amount_paid_centavos=?,payment_status=?,delivery_date=?,remarks=?,updated_at=? WHERE id=?`, args: [...cols(v), new Date().toISOString(), id] }, { sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] }, ...itemStatements(v.items, refById(id)), ...valueStatements(writes, refById(id))], 'write');
+  const [r] = await getDb().batch([{ sql: `UPDATE invoices SET date_issued=?,invoice_no=?,cr_no=?,client_name=?,client_tin=?,client_address=?,product_service=?,due_date=?,amount_centavos=?,amount_paid_centavos=?,payment_status=?,delivery_date=?,remarks=?,updated_at=? WHERE id=?`, args: [...cols(v), new Date().toISOString(), id] }, { sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] }, ...itemStatements(v.items, refById(id)), ...valueStatements(writes, refById(id))], 'write');
   return r.rowsAffected ? get(id) : null;
 }
 export async function remove(id) {

@@ -3,7 +3,7 @@
 // Usage: node --env-file=.env server/database/copy-data.js [--dry-run]
 import { createClient } from '@libsql/client';
 import { initSchema } from './db.js';
-import { INVOICE_COLUMNS } from './schema.js';
+import { INVOICE_COLUMNS as BASE_COLUMNS, INVOICE_CLIENT_COLUMNS } from './schema.js';
 
 const dry = process.argv.includes('--dry-run');
 const srcUrl = process.env.SOURCE_DATABASE_URL || 'file:./local.db';
@@ -14,6 +14,9 @@ if (srcUrl === dstUrl) { console.error('Source and target are the same database.
 const src = createClient({ url: srcUrl, authToken: process.env.SOURCE_AUTH_TOKEN || undefined });
 const dst = createClient({ url: dstUrl, authToken: process.env.TURSO_AUTH_TOKEN || undefined });
 
+// Client TIN/address exist only in sources that have been upgraded; an older source simply has none to copy.
+const have = new Set((await src.execute('PRAGMA table_info(invoices)')).rows.map((r) => r.name));
+const INVOICE_COLUMNS = [...BASE_COLUMNS, ...INVOICE_CLIENT_COLUMNS.filter((c) => have.has(c))];
 const rows = (await src.execute(`SELECT ${INVOICE_COLUMNS.join(',')} FROM invoices ORDER BY id`)).rows;
 console.log(`Source rows: ${rows.length}`);
 if (dry) { console.log('Dry run: nothing written.'); process.exit(0); }
