@@ -54,7 +54,7 @@ With no `TURSO_DATABASE_URL`, development uses a local SQLite file `./local.db`.
 
 ## Tests and build
 ```
-npm test          # vitest: validation, money, API handler (temp DB), adapter, dates, config, migration files, custom invoice fields
+npm test          # vitest: validation, money, API handler (temp DB), adapter, dates, config, migration files, custom invoice fields, dashboard invoice overview
 npm run build     # vite build -> client/dist
 ```
 
@@ -97,6 +97,14 @@ Settings has two clearly separate panels (side by side on wide screens): **Invoi
 - **API**: `GET /api/dashboard-filters` returns every available filter with its control type, options and `enabled` flag; `PUT /api/dashboard-filters` takes `{ filters: [{ key, enabled }] }` in the desired order. Dashboard endpoints accept `paymentStatus`, `deliveryStatus` and `cf_<id>` query parameters.
 - **Rules kept**: cancelled invoices stay excluded from dashboard figures, so Payment status offers Unpaid, Pending, Partially Paid and Paid. The dashboard product filter is still an exact match, and now also matches invoices that list that product among several items.
 - **Long lists**: product options, invoice fields, dashboard filters and dropdown options show the first few entries with a "See More…" toggle ("Expand Options" in the field editor).
+
+## Dashboard: invoices at a glance (number-light collections view)
+Three cards sit under the Unpaid-by-due-date row. They use counts, colours and plain words; peso amounts stay hidden until asked for.
+- **Every invoice at a glance**: one square per invoice issued in the selected period, most urgent first. Colours: Late over 60 days, Late 31-60, Late 1-30, No due date, Waiting (not due yet; due today still counts as waiting) and Paid. Hover or focus a square for a plain-words line, click it to open that invoice in the Invoices list, and use the legend chips to highlight one status. Arrow keys move between squares. Up to 400 squares are drawn (late ones first); a note offers the full list when a period has more.
+- **Who to follow up with**: clients that have late invoices, longest wait first; the bar is days late. Click a client for its late invoices. **Show amounts** reveals how much is still owed (off by default, remembered in the browser, also adds amounts to the hover line).
+- **Where each month's invoices stand today**: the last six issue months ending with the period's end month, as a 100% stacked bar of the same six statuses. Click a month (or its button) to open that month's invoices. It follows the client/product/custom filters but not the start date.
+- **Data**: no schema change. `GET /api/dashboard/invoice-overview` (accepts the same filters as the other dashboard endpoints, plus an optional `asOf=YYYY-MM-DD`) returns `counts`, `invoices` (with `state` and `days_late`) and `months`. A state comes from `payment_status`, amounts and `due_date`: Pending/Partially Paid with a balance is unpaid; unpaid with no due date is "No due date"; due before today is late. Cancelled invoices are excluded, as everywhere else on the dashboard. The Overdue card and these squares use the same rule.
+- **Limit**: payment dates are not stored, so the app cannot say whether an invoice was paid on time. The monthly card shows today's status of each month's invoices instead; recent months look less complete because their invoices are not due yet.
 
 ## Business rules (unchanged)
 Money is integer centavos; status / amount-paid rules are enforced server-side; delivery status is derived from Delivery Date; invoice numbers are trimmed and unique case-insensitively (SQLite NOCASE folds ASCII only); the dashboard excludes Cancelled except the status distribution and recent list; dates use Asia/Manila. Dashboard client/product filters are exact match; invoice-list filters are "contains". Dashboard analytics calculate outstanding balances from amount minus amount paid, classify invoices by the optional Due Date, and show a No due date category. Collected Revenue is grouped by invoice issue month because the schema does not store payment dates; this limitation is shown in the dashboard.

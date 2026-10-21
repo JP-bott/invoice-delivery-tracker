@@ -101,6 +101,38 @@ export const handlers = {
     }
     return { start, end, total: Object.values(totals).reduce((sum, item) => sum + item.value, 0), buckets: totals };
   },
+  // One square per invoice plus a 6-month view of how each issue month's invoices stand today.
+  // Uses only stored fields: payment_status, amounts, due_date, date_issued. Late = unpaid and past the due date (as the Overdue card).
+  async 'invoice-overview'(q) {
+    const today = q.asOf || new Date().toISOString().slice(0, 10);
+    const base = f({ ...q, dateFrom: undefined, dateTo: undefined, asOf: undefined });
+    const STATE = `CASE WHEN payment_status NOT IN ('Pending','Partially Paid') OR amount_centavos <= amount_paid_centavos THEN 'paid'
+      WHEN due_date IS NULL THEN 'noDue' WHEN due_date >= ? THEN 'waiting'
+      WHEN julianday(?) - julianday(due_date) <= 30 THEN 'late1' WHEN julianday(?) - julianday(due_date) <= 60 THEN 'late2' ELSE 'late3' END`;
+    const stateArgs = [today, today, today];
+    const range = []; const rangeArgs = [];
+    if (q.dateFrom) { range.push('date_issued >= ?'); rangeArgs.push(q.dateFrom); }
+    if (q.dateTo) { range.push('date_issued <= ?'); rangeArgs.push(q.dateTo); }
+    const scoped = `${base.where}${range.length ? ` AND ${range.join(' AND ')}` : ''}`;
+    const counts = Object.fromEntries(['late3', 'late2', 'late1', 'noDue', 'waiting', 'paid'].map((k) => [k, 0]));
+    (await run(`SELECT state, COUNT(*) n FROM (SELECT ${STATE} AS state FROM invoices ${scoped}) GROUP BY state`, [...stateArgs, ...base.args, ...rangeArgs]))
+      .forEach((r) => { counts[r.state] = Number(r.n); });
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    const LIMIT = 400; // most urgent first, so a very large period drops paid invoices before late ones
+    const rows = await run(`SELECT * FROM (SELECT *, ${STATE} AS state FROM invoices ${scoped}) ORDER BY CASE state WHEN 'late3' THEN 0 WHEN 'late2' THEN 1 WHEN 'late1' THEN 2 WHEN 'noDue' THEN 3 WHEN 'waiting' THEN 4 ELSE 5 END, date_issued DESC, id DESC LIMIT ${LIMIT}`, [...stateArgs, ...base.args, ...rangeArgs]);
+    const invoices = rows.map((r) => ({ ...moneyRow(r), state: r.state, days_late: r.state.startsWith('late') ? Math.round((Date.parse(today) - Date.parse(r.due_date)) / 86400000) : 0 }));
+    // Last 6 issue months ending with the month of the period's end date (or today).
+    const anchor = q.dateTo || today;
+    const first = shiftMonth(anchor, -5), last = monthEnd(anchor);
+    const monthRows = await run(`SELECT ym, state, COUNT(*) n FROM (SELECT substr(date_issued,1,7) AS ym, ${STATE} AS state FROM invoices ${base.where} AND date_issued >= ? AND date_issued <= ?) GROUP BY ym, state`, [...stateArgs, ...base.args, first, last]);
+    const months = [];
+    for (let cursor = first; cursor <= last; cursor = shiftMonth(cursor, 1)) {
+      months.push({ key: cursor.slice(0, 7), label: new Intl.DateTimeFormat('en', { month: 'short' }).format(new Date(`${cursor}T00:00:00Z`)), dateFrom: cursor, dateTo: monthEnd(cursor), late3: 0, late2: 0, late1: 0, noDue: 0, waiting: 0, paid: 0, total: 0 });
+    }
+    const byKey = Object.fromEntries(months.map((m) => [m.key, m]));
+    monthRows.forEach((r) => { const m = byKey[r.ym]; if (m) { m[r.state] += Number(r.n); m.total += Number(r.n); } });
+    return { asOf: today, total, shown: invoices.length, truncated: total > invoices.length, counts, invoices, months };
+  },
   async 'top-clients'(q) {
     const { where, args } = f(q);
     return (await run(`SELECT client_name name, SUM(amount_centavos) v, COUNT(*) c FROM invoices ${where} GROUP BY client_name ORDER BY v DESC LIMIT 10`, args)).map((r) => ({ name: r.name, value: toPesos(r.v), count: Number(r.c) }));
