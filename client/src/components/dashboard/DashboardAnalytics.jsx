@@ -1,68 +1,24 @@
 import { useState } from 'react';
-import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { ArrowUpRight, CalendarClock, CalendarDays, CircleAlert, Clock3, HandCoins, ReceiptText } from 'lucide-react';
 import { peso } from '../../utils/api.js';
 import { AGING_COLORS } from '../../utils/constants.js';
 import { EmptyState, HoverCard } from '../ui.jsx';
 import AnalyticsModal from './AnalyticsModal.jsx';
-import { pesoShort } from './Charts.jsx';
 
 const ICONS = { overdue: CircleAlert, today: Clock3, week: CalendarClock, month: CalendarDays, next30: CalendarClock, upcoming: ArrowUpRight, noDue: ReceiptText };
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-const RevenueTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  const row = (key, name, color) => { const p = payload.find((x) => x.dataKey === key); return p && <p className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ background: color }} aria-hidden="true" /><span className="opacity-80">{name}</span><span className="num ml-auto pl-4 font-medium">{peso(p.value || 0)}</span></p>; };
-  return <div className="rounded-lg bg-tooltip px-3 py-2 text-xs text-tooltip-fg shadow-pop"><p className="mb-1 font-semibold">{label}</p>{row('value', 'Collected', 'var(--chart-2)')}{row('comparison', 'Previous period', 'var(--chart-muted)')}<p className="mt-1.5 opacity-70">Click to view records</p></div>;
-};
-
-export default function DashboardAnalytics({ data, periodLabel }) {
+export default function DashboardAnalytics({ data }) {
   const [modal, setModal] = useState(null);
   if (!data) return null;
-  const { revenue, receivables } = data;
+  const { receivables } = data;
   const categories = receivables.categories;
   const invoiceCount = categories.reduce((n, c) => n + c.count, 0);
   const chartData = categories.filter((c) => c.count > 0).map((c) => ({ ...c, value: c.count }));
-  const hasRevenue = revenue.months.some((m) => m.value > 0 || m.comparison > 0);
 
   const openCategory = (category) => category && setModal({ title: `${category.label} invoices`, description: `Unpaid balances as of ${receivables.asOf}`, records: category.records, range: `As of ${receivables.asOf}` });
-  const openRevenue = (month) => month && setModal({ title: `Collected revenue · ${month.label} ${month.key.slice(0, 4)}`, description: 'Payment dates are not stored, so collections are grouped by invoice issue date.', records: revenue.records.filter((row) => row.date_issued.slice(0, 7) === month.key), amountKey: 'amount_paid', amountLabel: 'Collected', range: `${month.label} ${month.key.slice(0, 4)} · grouped by issue date` });
-  // Recharts 3 reports the hovered point as an index on the chart state.
-  const onRevenueClick = (state) => { const i = Number(state?.activeTooltipIndex ?? state?.activeIndex); if (Number.isInteger(i)) openRevenue(revenue.months[i]); };
-
   return <>
-    <section className="card card-pad flex min-w-0 flex-col lg:col-span-3" aria-labelledby="rev-h">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="eyebrow" id="rev-h">Collected revenue</p>
-          <p className="num mt-1 text-3xl font-semibold tracking-tight text-fg">{peso(revenue.total)}</p>
-          <p className="mt-1 text-xs text-fg-muted">{periodLabel}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1.5 text-xs text-fg-muted">
-          <span className="badge badge-info" title="The database does not store payment dates, so collected amounts are grouped by invoice issue month.">{revenue.proxy ? 'Grouped by issue date' : 'Payment records'}</span>
-          <span className="flex items-center gap-3"><span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded bg-[var(--chart-2)]" aria-hidden="true" />Collected</span><span className="flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed border-[var(--chart-muted)]" aria-hidden="true" />Previous period</span></span>
-        </div>
-      </div>
-      {hasRevenue ? <>
-        <div className="mt-4 min-h-[260px] w-full flex-1 cursor-pointer" role="img" aria-label="Area chart of collected revenue by month. Click a month to see its records.">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={revenue.months} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} onClick={onRevenueClick}>
-              <defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.3} /><stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0.02} /></linearGradient></defs>
-              <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} tick={{ fill: 'var(--fg-subtle)' }} />
-              <YAxis tickLine={false} axisLine={false} fontSize={11} width={52} tick={{ fill: 'var(--fg-subtle)' }} tickFormatter={pesoShort} />
-              <Tooltip content={<RevenueTooltip />} cursor={{ stroke: 'var(--line-strong)' }} />
-              <Area type="monotone" dataKey="comparison" name="Previous period" stroke="var(--chart-muted)" strokeWidth={2} strokeDasharray="5 5" fill="none" activeDot={false} />
-              <Area type="monotone" dataKey="value" name="Collected" stroke="var(--chart-2)" strokeWidth={2.5} fill="url(#revenueFill)" activeDot={{ r: 5, fill: 'var(--chart-2)', stroke: 'var(--surface)', strokeWidth: 2 }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Open collected revenue by month">
-          {revenue.months.map((m) => <button key={m.key} type="button" onClick={() => openRevenue(m)} className="btn btn-secondary btn-sm shrink-0"><span>{m.label}</span><span className="num text-fg-muted">{pesoShort(m.value)}</span></button>)}
-        </div>
-      </> : <EmptyState icon={HandCoins} title="No collections in this period" description="Record a payment on an invoice, or choose a wider date range." />}
-    </section>
-
     <section className="card card-pad min-w-0 lg:col-span-2" aria-labelledby="rec-h">
       <div className="flex items-start justify-between gap-3">
         <div><p className="eyebrow" id="rec-h">Unpaid invoices by due date</p><p className="num mt-1 text-3xl font-semibold tracking-tight text-fg">{invoiceCount}</p><p className="mt-1 text-xs text-fg-muted">As of {receivables.asOf} · hover a row for amounts, click for the invoices</p></div>

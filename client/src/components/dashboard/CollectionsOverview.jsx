@@ -165,7 +165,7 @@ function MonthlyStatus({ data, onOpenInvoices }) {
   const open = (m) => m && m.total > 0 && onOpenInvoices({ dateFrom: m.dateFrom, dateTo: m.dateTo });
   const stack = [...STATES].reverse(); // paid at the bottom, the most urgent on top
   return (
-    <ChartCard title="Where each month's invoices stand today" description="Share of the invoices issued in each month that are paid, waiting or late. Recent months look less complete because newer invoices are not due yet." data={months.some((m) => m.total > 0) ? months : []} className="lg:col-span-5">
+    <ChartCard title="Where each month's invoices stand today" description="Share of the invoices issued in each month that are paid, waiting or late. Recent months look less complete because newer invoices are not due yet." data={months.some((m) => m.total > 0) ? months : []} className="lg:col-span-3">
       <div className="h-[220px] cursor-pointer" role="img" aria-label="Stacked bar chart of the last six months. Each bar shows the share of that month's invoices that are paid, waiting or late. Click a month to see its invoices.">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={months} stackOffset="expand" margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
@@ -186,15 +186,19 @@ function MonthlyStatus({ data, onOpenInvoices }) {
   );
 }
 
-export default function CollectionsOverview({ data, periodLabel, onOpenInvoices, onOpenPeriod }) {
+// Row 1: every invoice + the unpaid-by-due-date card passed in by the page. Row 2: follow-up list + monthly status.
+export default function CollectionsOverview({ data, periodLabel, onOpenInvoices, onOpenPeriod, unpaidCard = null }) {
   const [showAmounts, setShowAmounts] = useStoredBool('dashboard-show-amounts', false);
   if (!data) return null;
   const anyLate = data.counts.late1 + data.counts.late2 + data.counts.late3 > 0;
   return <>
     <div className="grid gap-4 lg:grid-cols-5">
       <InvoiceSquares data={data} periodLabel={periodLabel} showAmounts={showAmounts} onOpenInvoices={onOpenInvoices} onOpenPeriod={onOpenPeriod} />
-      {anyLate ? <FollowUp data={data} showAmounts={showAmounts} onToggleAmounts={() => setShowAmounts((v) => !v)} /> : <NobodyLate asOf={data.asOf} />}
+      {unpaidCard}
     </div>
-    <div className="grid gap-4 lg:grid-cols-5"><MonthlyStatus data={data} onOpenInvoices={onOpenInvoices} /></div>
+    <div className="grid gap-4 lg:grid-cols-5">
+      {anyLate ? <FollowUp data={data} showAmounts={showAmounts} onToggleAmounts={() => setShowAmounts((v) => !v)} /> : <NobodyLate asOf={data.asOf} />}
+      <MonthlyStatus data={data} onOpenInvoices={onOpenInvoices} />
+    </div>
   </>;
 }

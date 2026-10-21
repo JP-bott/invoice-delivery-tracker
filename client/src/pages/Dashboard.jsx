@@ -6,7 +6,6 @@ import { range } from '../utils/dates.js';
 import { PRESETS } from '../utils/constants.js';
 import SummaryCards from '../components/dashboard/SummaryCards.jsx';
 import RecentTransactions from '../components/dashboard/RecentTransactions.jsx';
-import { StatusChart, TopClientsChart, TopProductsChart, TrendChart } from '../components/dashboard/Charts.jsx';
 import DashboardAnalytics from '../components/dashboard/DashboardAnalytics.jsx';
 import CollectionsOverview from '../components/dashboard/CollectionsOverview.jsx';
 import { PageHeader, Skeleton } from '../components/ui.jsx';
@@ -36,14 +35,14 @@ function FilterControl({ def, value, opts, onChange }) {
   return <input aria-label={def.aria_label || def.label} type={type} step={type === 'number' ? 'any' : undefined} placeholder={def.control === 'text' ? `${def.label} contains…` : def.label} className={cls} value={value} onChange={(e) => onChange(e.target.value, type === 'date')} />;
 }
 
-const ENDPOINTS = ['summary', 'invoice-trends', 'payment-distribution', 'analytics', 'top-clients', 'top-products', 'delivery-summary', 'recent-invoices', 'invoice-overview'];
+const ENDPOINTS = ['summary', 'analytics', 'delivery-summary', 'recent-invoices', 'invoice-overview'];
 
 function DashboardSkeleton() {
   return (
     <div className="space-y-4" aria-busy="true" aria-label="Loading dashboard">
       <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[120px]" />)}</div>
       <div className="grid gap-4 lg:grid-cols-5"><Skeleton className="h-[400px] lg:col-span-3" /><Skeleton className="h-[400px] lg:col-span-2" /></div>
-      <div className="grid gap-4 lg:grid-cols-5"><Skeleton className="h-[360px] lg:col-span-3" /><Skeleton className="h-[360px] lg:col-span-2" /></div>
+      <div className="grid gap-4 lg:grid-cols-5"><Skeleton className="h-[320px] lg:col-span-2" /><Skeleton className="h-[320px] lg:col-span-3" /></div>
       <Skeleton className="h-72" />
     </div>
   );
@@ -74,7 +73,7 @@ export default function Dashboard() {
     setLoading(true);
     // KPI counts are "as of now": same client/product filters, but never limited by the date range.
     Promise.all([...ENDPOINTS.map((n) => api(`/api/dashboard/${n}?${q}`)), api(`/api/dashboard/summary?${qs(active)}`)])
-      .then(([summary, trends, dist, analytics, clients, products, delivery, recent, overview, now]) => { if (live) { setD({ summary, now, trends, dist, analytics, clients, products, delivery, recent, overview }); setErr(''); } })
+      .then(([summary, analytics, delivery, recent, overview, now]) => { if (live) { setD({ summary, now, analytics, delivery, recent, overview }); setErr(''); } })
       .catch((e) => live && setErr(e.message)).finally(() => live && setLoading(false));
     return () => { live = false; };
   }, [preset, customFrom, customTo, activeKey, tick]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,10 +108,7 @@ export default function Dashboard() {
       {loading && !d ? <DashboardSkeleton /> : d && (
         <div className={`space-y-4 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
           <SummaryCards s={d.now} receivables={d.analytics.receivables} onOpenInvoices={openNow} />
-          <div className="grid gap-4 lg:grid-cols-5"><DashboardAnalytics data={d.analytics} periodLabel={periodLabel} /></div>
-          <CollectionsOverview data={d.overview} periodLabel={periodLabel} onOpenInvoices={openNow} onOpenPeriod={() => openNow(reportRange)} />
-          <div className="grid gap-4 lg:grid-cols-5"><TrendChart data={d.trends} /><StatusChart data={d.dist} /></div>
-          <div className="grid gap-4 lg:grid-cols-2"><TopClientsChart data={d.clients} /><TopProductsChart data={d.products} /></div>
+          <CollectionsOverview data={d.overview} periodLabel={periodLabel} onOpenInvoices={openNow} onOpenPeriod={() => openNow(reportRange)} unpaidCard={<DashboardAnalytics data={d.analytics} />} />
           <RecentTransactions data={d.recent} />
         </div>)}
     </div>
