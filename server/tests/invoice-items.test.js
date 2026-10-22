@@ -15,11 +15,11 @@ beforeAll(async () => {
 const call = (method, url, body) => { const u = new URL(url, 'http://x'); return handle({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body }); };
 const GET = (u) => call('GET', u); const POST = (u, b) => call('POST', u, b); const PUT = (u, b) => call('PUT', u, b); const DEL = (u) => call('DELETE', u);
 const base = { invoice_prefix: 'SVI', date_issued: '2026-10-01', client_name: 'Acme', amount: 500, payment_status: 'Pending', amount_paid: 0 };
-let n = 0; const inv = (extra = {}) => ({ ...base, invoice_no: `IT-${++n}`, ...extra });
+const inv = (extra = {}) => ({ ...base, ...extra });
 const two = [{ product_service: 'Cement', unit_cost: '30', quantity: '10' }, { product_service: 'IT Services', unit_cost: '80', quantity: '2.5' }]; // 300 + 200 = 500 (matches base)
 
 describe('item validation', () => {
-  const v = (o) => validateInvoice({ ...base, invoice_no: 'X', ...o });
+  const v = (o) => validateInvoice({ ...base, ...o });
   it('accepts several items and builds the product summary', () => {
     const r = v({ items: two });
     expect(r.errors).toEqual({});
@@ -46,7 +46,7 @@ describe('invoice items API', () => {
     expect(created.body.items).toEqual([{ product_service: 'Cement', quantity: 10, unit_cost: 30, amount: 300 }, { product_service: 'IT Services', quantity: 2.5, unit_cost: 80, amount: 200 }]);
     expect(created.body.amount).toBe(500);
     expect(created.body.product_service).toBe('Cement, IT Services');
-    const upd = await PUT(`/api/invoices/${created.body.id}`, inv({ invoice_no: created.body.invoice_no, items: [{ product_service: 'Rice 50kg', unit_cost: '100', quantity: 3 }], amount_paid: 0 }));
+    const upd = await PUT(`/api/invoices/${created.body.id}`, inv({ items: [{ product_service: 'Rice 50kg', unit_cost: '100', quantity: 3 }], amount_paid: 0 }));
     expect(upd.status).toBe(200);
     expect(upd.body.items).toEqual([{ product_service: 'Rice 50kg', quantity: 3, unit_cost: 100, amount: 300 }]);
     expect(upd.body.amount).toBe(300);

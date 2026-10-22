@@ -32,8 +32,9 @@
 .inv-sheet .totals td { height: 17.5px; font-size: 8pt; }
 .inv-sheet .totals .lbl { text-align: right; }
 .inv-sheet .totals .val { text-align: right; font-variant-numeric: tabular-nums; }
-.inv-sheet .totals .c1 { width: 18%; }
-.inv-sheet .totals .c2 { width: 22%; }
+.inv-sheet .totals .c1 { width: 22%; }
+.inv-sheet .totals .c1.lbl { text-align: left; white-space: nowrap; }
+.inv-sheet .totals .c2 { width: 18%; }
 .inv-sheet .totals .c3 { width: 40%; }
 .inv-sheet .totals .c4 { width: 20%; }
 .inv-sheet .totals .grand { font-weight: 700; }

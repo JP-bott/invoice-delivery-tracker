@@ -2,14 +2,13 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import os from 'node:os'; import path from 'node:path'; import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@libsql/client';
-import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS } from '../database/schema.js';
+import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS, SEQUENCE_STATEMENTS, INVOICE_TERMS_COLUMN } from '../database/schema.js';
 import { initSchema } from '../database/db.js';
 import { validateInvoice } from '../services/validate.js';
 import { parseUnitCost, parseQtyMilli, lineAmountCentavos, priceItems, computeTotals } from '../../shared/pricing.js';
-import { normalizeInvoiceNo, splitInvoiceNo } from '../../shared/invoiceNumber.js';
+import { splitInvoiceNo, sequenceOf, formatInvoiceNo, sheetInvoiceNo } from '../../shared/invoiceNumber.js';
 import { sheetPricing } from '../../client/src/utils/sheetPricing.js';
 import { sanitizeDecimal, deriveUnitCost } from '../../client/src/utils/items.js';
-import { invoiceNoFor } from '../../client/src/utils/invoiceNo.js';
 
 let handle, dbFile;
 beforeAll(async () => {
@@ -18,9 +17,9 @@ beforeAll(async () => {
   ({ handle } = await import('../handler.js'));
 });
 const call = (method, url, body) => { const u = new URL(url, 'http://x'); return handle({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body }); };
-const GET = (u) => call('GET', u); const POST = (u, b) => call('POST', u, b); const PUT = (u, b) => call('PUT', u, b);
+const GET = (u) => call('GET', u); const POST = (u, b) => call('POST', u, b); const PUT = (u, b) => call('PUT', u, b); const DEL = (u) => call('DELETE', u);
 const base = { date_issued: '2026-10-01', invoice_prefix: 'SVI', client_name: 'Acme', payment_status: 'Pending', amount_paid: 0 };
-let n = 0; const inv = (extra = {}) => ({ ...base, invoice_no: `P-${++n}`, ...extra });
+const inv = (extra = {}) => ({ ...base, ...extra });
 const raw = () => createClient({ url: 'file:' + dbFile });
 
 describe('line item maths', () => {
@@ -65,19 +64,7 @@ describe('existing VAT / withholding arithmetic is unchanged', () => {
   });
 });
 
-describe('SVI / SI number format', () => {
-  const ok = (typed, prefix, want) => expect(normalizeInvoiceNo(typed, prefix)).toEqual({ value: want });
-  it('applies the prefix to a bare number', () => { ok('001', 'SVI', 'SVI - 001'); ok('2026-001', 'SVI', 'SVI - 2026-001'); ok('001', 'SI', 'SI - 001'); ok('2026-001', 'SI', 'SI - 2026-001'); });
-  it('keeps a complete number without duplicating the prefix', () => { ok('SVI - 001', 'SVI', 'SVI - 001'); ok('SI - 2026-001', 'SI', 'SI - 2026-001'); ok('SVI - 001', '', 'SVI - 001'); ok('SI - 001', undefined, 'SI - 001'); });
-  it('prevents duplicate prefixes', () => { ok('SI - SI - 001', 'SI', 'SI - 001'); ok('SVI - SVI - 001', 'SVI', 'SVI - 001'); ok('SVI SVI 001', '', 'SVI - 001'); });
-  it('trims, collapses whitespace, and normalizes separators and case of the prefix', () => {
-    ok('  001  ', 'SVI', 'SVI - 001'); ok('svi-001', '', 'SVI - 001'); ok('si001', '', 'SI - 001'); ok('SI   -   2026 - 001', 'SI', 'SI - 2026-001'); ok('SVI–001', '', 'SVI - 001');
-  });
-  it('treats a word that merely starts with SI as the number, not a prefix', () => { ok('SIGMA-1', 'SI', 'SI - SIGMA-1'); });
-  it('rejects a missing, mismatched, mixed or malformed number', () => {
-    for (const [t, p] of [['', 'SVI'], ['   ', 'SI'], ['SVI', 'SVI'], ['SVI - ', ''], ['001', ''], ['SI - 1', 'SVI'], ['SVI - SI - 1', ''], ['0 1', 'SI'], ['SI - #1', 'SI'], ['001', 'VI'], [null, 'SVI']]) expect(normalizeInvoiceNo(t, p).error).toBeTruthy();
-  });
-  it('never saves the literal [No.] placeholder', () => { expect(normalizeInvoiceNo('[No.]', 'SVI').error).toBeTruthy(); });
+describe('SVI / SI number parsing', () => {
   it('splits stored numbers for editing, including older formats', () => {
     expect(splitInvoiceNo('SVI - 001')).toEqual({ prefix: 'SVI', number: '001' }); expect(splitInvoiceNo('SI - 2026-001')).toEqual({ prefix: 'SI', number: '2026-001' });
     expect(splitInvoiceNo('SVI001')).toEqual({ prefix: 'SVI', number: '001' }); expect(splitInvoiceNo('VI00123')).toEqual({ prefix: 'VI', number: '00123' }); expect(splitInvoiceNo('INV-9')).toEqual({ prefix: '', number: 'INV-9' });
@@ -85,7 +72,7 @@ describe('SVI / SI number format', () => {
 });
 
 describe('validation', () => {
-  const v = (o) => validateInvoice({ ...base, invoice_no: '1', ...o });
+  const v = (o) => validateInvoice({ ...base, ...o });
   const item = { product_service: 'A', unit_cost: '10', quantity: '2' };
   it('requires a unit cost and quantity on every line, keyed per row', () => {
     const e = v({ items: [item, { product_service: 'B', unit_cost: '', quantity: '1' }, { product_service: 'C', unit_cost: '-5', quantity: '-1' }, { product_service: 'D', unit_cost: 'abc', quantity: '' }] }).errors;
@@ -102,8 +89,9 @@ describe('validation', () => {
   });
   it('requires at least one line item and a valid number', () => {
     expect(v({ items: [] }).errors.product_service).toBeTruthy();
-    expect(v({ items: [item], invoice_no: '', invoice_prefix: 'SVI' }).errors.invoice_no).toBeTruthy();
-    expect(v({ items: [item], invoice_no: '5', invoice_prefix: undefined }).errors.invoice_no).toBeTruthy();
+    expect(v({ items: [item], invoice_prefix: 'SVI' }).errors).toEqual({});
+    for (const bad of [undefined, '', 'VI', 'INV']) expect(v({ items: [item], invoice_prefix: bad }).errors.invoice_prefix).toBeTruthy();
+    expect(v({ items: [item], invoice_no: 'SI - 0100', terms: '60-days' }).value).toMatchObject({ invoice_no: '', terms: '30-days' }); // never taken from the request
   });
 });
 
@@ -124,7 +112,7 @@ describe('invoice API: itemised pricing', () => {
   });
   it('recalculates when unit cost or quantity change on edit', async () => {
     const c = await POST('/api/invoices', inv({ items }));
-    const u = await PUT(`/api/invoices/${c.body.id}`, inv({ invoice_no: c.body.invoice_no, items: [{ ...items[0], quantity: '3' }, items[1], { product_service: 'Rice 50kg', unit_cost: '10', quantity: '4' }] }));
+    const u = await PUT(`/api/invoices/${c.body.id}`, inv({ items: [{ ...items[0], quantity: '3' }, items[1], { product_service: 'Rice 50kg', unit_cost: '10', quantity: '4' }] }));
     expect(u.status).toBe(200); expect(u.body.amount).toBe(3751.5 + 149.99 + 40);
     expect(u.body.items.map((i) => i.amount)).toEqual([3751.5, 149.99, 40]);
   });
@@ -150,25 +138,137 @@ describe('invoice API: itemised pricing', () => {
   });
 });
 
-describe('invoice API: SVI/SI numbers', () => {
+describe('invoice API: SI / SVI running numbers and fixed terms', () => {
   const one = [{ product_service: 'A', unit_cost: '10', quantity: '1' }];
-  const post = (no, prefix) => POST('/api/invoices', { ...base, invoice_no: no, invoice_prefix: prefix, items: one });
-  it('stores the standardized format', async () => {
-    for (const [no, prefix, want] of [['0001', 'SVI', 'SVI - 0001'], ['2026-0002', 'SVI', 'SVI - 2026-0002'], ['0003', 'SI', 'SI - 0003'], ['2026-0004', 'SI', 'SI - 2026-0004'], [' SI - SI - 0005 ', 'SI', 'SI - 0005'], ['svi-0006', '', 'SVI - 0006'], ['SVI - SVI - 0007', 'SVI', 'SVI - 0007']]) {
-      const r = await post(no, prefix);
-      expect(r.status).toBe(201); expect(r.body.invoice_no).toBe(want);
-      expect((await GET(`/api/invoices/${r.body.id}`)).body.invoice_no).toBe(want);
-    }
+  const post = (prefix, extra = {}) => POST('/api/invoices', { ...base, invoice_prefix: prefix, items: one, ...extra });
+  const next = async (prefix) => (await GET(`/api/invoices/next-number?prefix=${prefix}`)).body.number;
+  const seqRow = async (prefix) => Number((await raw().execute({ sql: 'SELECT last_number n FROM invoice_sequences WHERE prefix = ?', args: [prefix] })).rows[0].n);
+  it('numbers each type independently and stores "SI - 0001" / "SVI - 0001" style values', async () => {
+    const si = await seqRow('SI'), svi = await seqRow('SVI'); // earlier tests in this file already saved invoices
+    expect(await next('SI')).toBe(formatInvoiceNo('SI', si + 1)); expect(await next('SVI')).toBe(formatInvoiceNo('SVI', svi + 1));
+    const a = await post('SI'), b = await post('SVI'), c = await post('SI'), d = await post('si'); // type is case-insensitive
+    expect([a, b, c, d].map((r) => r.status)).toEqual([201, 201, 201, 201]);
+    expect([a, b, c, d].map((r) => r.body.invoice_no)).toEqual([formatInvoiceNo('SI', si + 1), formatInvoiceNo('SVI', svi + 1), formatInvoiceNo('SI', si + 2), formatInvoiceNo('SI', si + 3)]);
+    expect(a.body.invoice_no).toMatch(/^SI - \d{4,}$/);
+    expect((await GET(`/api/invoices/${a.body.id}`)).body.invoice_no).toBe(a.body.invoice_no);
+    expect(await next('SI')).toBe(formatInvoiceNo('SI', si + 4)); expect(await next('SVI')).toBe(formatInvoiceNo('SVI', svi + 2));
   });
-  it('rejects an unusable number and a prefix mismatch', async () => {
-    for (const [no, prefix] of [['', 'SVI'], ['SVI', 'SVI'], ['0100', ''], ['SI - 0100', 'SVI'], ['0100', 'VI'], ['[No.]', 'SVI']]) {
-      const r = await post(no, prefix); expect(r.status).toBe(422); expect(r.body.error.fields.invoice_no).toBeTruthy();
-    }
+  it('showing the next number consumes nothing, however often it is asked for', async () => {
+    const before = [await seqRow('SI'), await seqRow('SVI')];
+    for (let i = 0; i < 3; i++) { await next('SI'); await next('SVI'); }
+    expect([await seqRow('SI'), await seqRow('SVI')]).toEqual(before);
+    expect((await post('SI')).body.invoice_no).toBe(formatInvoiceNo('SI', before[0] + 1));
   });
-  it('treats differently typed versions of the same number as duplicates', async () => {
-    expect((await post('0200', 'SVI')).status).toBe(201);
-    for (const [no, prefix] of [['SVI - 0200', ''], ['svi-0200', ''], ['0200', 'SVI'], [' 0200 ', 'SVI']]) expect((await post(no, prefix)).status).toBe(409);
-    expect((await post('0200', 'SI')).status).toBe(201); // a different prefix is a different number
+  it('asks for a valid type: the suggestion needs SI or SVI, and so does a new invoice', async () => {
+    for (const q of ['', 'prefix=VI', 'prefix=XX']) { const r = await GET(`/api/invoices/next-number?${q}`); expect(r.status).toBe(422); }
+    for (const bad of [undefined, '', 'VI', 'SIX']) { const r = await post(bad); expect(r.status).toBe(422); expect(r.body.error.fields.invoice_prefix).toBeTruthy(); }
+    expect((await call('POST', '/api/invoices/next-number', {})).status).toBe(404);
+  });
+  it('ignores a submitted invoice number and terms on create', async () => {
+    const want = await next('SI');
+    const r = await post('SI', { invoice_no: 'SI - 0001', terms: 'COD' });
+    expect(r.status).toBe(201); expect(r.body.invoice_no).toBe(want); expect(r.body.terms).toBe('30-days');
+    expect((await post('SVI', { invoice_no: 'SI - 0500' })).body.invoice_no.startsWith('SVI - ')).toBe(true);
+  });
+  it('an invoice keeps its number and terms for life: edits cannot change them', async () => {
+    const c = await post('SVI'), no = c.body.invoice_no;
+    const u = await PUT(`/api/invoices/${c.body.id}`, { ...base, items: one, invoice_prefix: 'SI', invoice_no: 'SI - 0001', terms: '90-days', remarks: 'edited' });
+    expect(u.status).toBe(200); expect(u.body.invoice_no).toBe(no); expect(u.body.terms).toBe('30-days'); expect(u.body.remarks).toBe('edited');
+    const noPrefix = await PUT(`/api/invoices/${c.body.id}`, { ...base, items: one });
+    expect(noPrefix.status).toBe(200); expect(noPrefix.body.invoice_no).toBe(no);
+  });
+  it('never reuses a number after its invoice is deleted or cancelled', async () => {
+    const x = await post('SVI'), y = await post('SVI');
+    expect((await DEL(`/api/invoices/${y.body.id}`)).status).toBe(204); // the highest one
+    expect(await next('SVI')).toBe(formatInvoiceNo('SVI', sequenceOf(y.body.invoice_no, 'SVI') + 1));
+    const z = await post('SVI'); expect(z.body.invoice_no).not.toBe(y.body.invoice_no); expect(sequenceOf(z.body.invoice_no, 'SVI')).toBe(sequenceOf(y.body.invoice_no, 'SVI') + 1);
+    const cx = await PUT(`/api/invoices/${x.body.id}`, { ...base, items: one, payment_status: 'Cancelled' });
+    expect(cx.status).toBe(200); expect(cx.body.invoice_no).toBe(x.body.invoice_no);
+    expect(sequenceOf((await post('SVI')).body.invoice_no, 'SVI')).toBe(sequenceOf(z.body.invoice_no, 'SVI') + 1);
+  });
+  it('simultaneous saves get unique, gapless numbers and the two types stay independent', async () => {
+    const siBefore = await seqRow('SI'), sviBefore = await seqRow('SVI');
+    const rs = await Promise.all(Array.from({ length: 12 }, (_, i) => post(i % 3 ? 'SI' : 'SVI')));
+    expect(rs.map((r) => r.status)).toEqual(Array(12).fill(201));
+    const nums = rs.map((r) => r.body.invoice_no);
+    expect(new Set(nums).size).toBe(12);
+    const of = (prefix, from) => nums.filter((x) => x.startsWith(prefix + ' ')).map((x) => sequenceOf(x, prefix)).sort((p, q) => p - q).map((v) => v - from);
+    expect(of('SI', siBefore)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]); expect(of('SVI', sviBefore)).toEqual([1, 2, 3, 4]);
+  });
+  it('pads to at least four digits and grows naturally past 9999', async () => {
+    await raw().execute(`UPDATE invoice_sequences SET last_number = 9998 WHERE prefix = 'SI'`);
+    expect([(await post('SI')).body.invoice_no, (await post('SI')).body.invoice_no, (await post('SI')).body.invoice_no]).toEqual(['SI - 9999', 'SI - 10000', 'SI - 10001']);
+    expect(formatInvoiceNo('SVI', 7)).toBe('SVI - 0007');
+  });
+  it('catches the counter up when a number is already in use (nothing is duplicated, nothing is lost)', async () => {
+    const db = raw(), taken = formatInvoiceNo('SVI', (await seqRow('SVI')) + 1);
+    await db.execute({ sql: `INSERT INTO invoices (date_issued,invoice_no,client_name,product_service,amount_centavos,amount_paid_centavos,payment_status,created_at,updated_at) VALUES ('2026-01-01',?,'Imported','X',100,0,'Pending','t','t')`, args: [taken] });
+    expect(await next('SVI')).not.toBe(taken); // the suggestion already skips it
+    const count = async () => Number((await db.execute('SELECT COUNT(*) c FROM invoices')).rows[0].c);
+    const before = await count(), r = await post('SVI');
+    expect(r.status).toBe(201); expect(r.body.invoice_no).not.toBe(taken);
+    expect(await count()).toBe(before + 1);
+    expect(await seqRow('SVI')).toBe(sequenceOf(r.body.invoice_no, 'SVI'));
+  });
+  it('rolls the number back with the invoice when the save fails', async () => {
+    const db = raw(), before = await seqRow('SI'), invoices = Number((await db.execute('SELECT COUNT(*) c FROM invoices')).rows[0].c);
+    await db.execute(`CREATE TRIGGER IF NOT EXISTS t_fail BEFORE INSERT ON invoice_items WHEN NEW.product_service = 'EXPLODE' BEGIN SELECT RAISE(ABORT, 'boom'); END`);
+    const r = await post('SI', { items: [{ product_service: 'EXPLODE', unit_cost: '1', quantity: '1' }] });
+    await db.execute('DROP TRIGGER t_fail');
+    expect(r.status).toBe(500);
+    expect(await seqRow('SI')).toBe(before);
+    expect(Number((await db.execute('SELECT COUNT(*) c FROM invoices')).rows[0].c)).toBe(invoices);
+  });
+  it('the database refuses duplicate numbers and any terms other than 30-days', async () => {
+    const db = raw(), r = await post('SI');
+    await expect_rejects(db.execute({ sql: `INSERT INTO invoices (date_issued,invoice_no,client_name,product_service,created_at,updated_at) VALUES ('2026-01-01',?,'C','P','t','t')`, args: [r.body.invoice_no.toLowerCase()] }), /UNIQUE/);
+    await expect_rejects(db.execute({ sql: `UPDATE invoices SET terms = '60-days' WHERE id = ?`, args: [r.body.id] }), /CHECK/);
+    await expect_rejects(db.execute({ sql: `UPDATE invoice_sequences SET last_number = -1 WHERE prefix = 'SI'` }), /CHECK/);
+  });
+  it('every saved and listed invoice reports terms 30-days', async () => {
+    const list = (await GET('/api/invoices?pageSize=100')).body.data;
+    expect(list.length).toBeGreaterThan(0); expect(list.every((x) => x.terms === '30-days')).toBe(true);
+  });
+});
+async function expect_rejects(promise, re) { let msg = ''; try { await promise; } catch (e) { msg = String(e.message); } expect(msg).toMatch(re); }
+
+describe('invoice numbering upgrade', () => {
+  const insert = (c, no) => c.execute({ sql: `INSERT INTO invoices (date_issued,invoice_no,client_name,product_service,amount_centavos,amount_paid_centavos,payment_status,created_at,updated_at) VALUES ('2026-01-01',?,'C','P',100,0,'Pending','t','t')`, args: [no] });
+  it('starts each type from its highest existing number, keeps every old number, and is idempotent', async () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'idt-seq-')), 'old.db'), c = createClient({ url: 'file:' + file });
+    await c.batch([...SCHEMA_STATEMENTS, ...CUSTOM_FIELD_STATEMENTS, ...ITEM_STATEMENTS], 'write');
+    const old = ['SI - 09878', 'SI - 0005', 'SVI - 0704', 'SVI- 0726', 'SVI001', 'VI00123', 'OLD-1', 'SI - 2026-001', 'SIGMA-9'];
+    for (const no of old) await insert(c, no);
+    expect((await c.execute('PRAGMA table_info(invoices)')).rows.map((r) => r.name)).not.toContain('terms');
+    await initSchema(c); await initSchema(c);
+    const seq = Object.fromEntries((await c.execute('SELECT prefix, last_number FROM invoice_sequences')).rows.map((r) => [r.prefix, Number(r.last_number)]));
+    expect(seq).toEqual({ SI: 9878, SVI: 726 });
+    expect((await c.execute('SELECT invoice_no FROM invoices ORDER BY id')).rows.map((r) => r.invoice_no)).toEqual(old);
+    expect((await c.execute('SELECT DISTINCT terms FROM invoices')).rows.map((r) => r.terms)).toEqual(['30-days']);
+  });
+  it('a database with no SI / SVI numbers starts both sequences at 0001', async () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'idt-seq0-')), 'new.db'), c = createClient({ url: 'file:' + file });
+    await initSchema(c);
+    expect((await c.execute('SELECT prefix, last_number FROM invoice_sequences ORDER BY prefix')).rows.map((r) => [r.prefix, Number(r.last_number)])).toEqual([['SI', 0], ['SVI', 0]]);
+  });
+  it('migrations/006 contains the sequence table and the terms column', () => {
+    const norm = (x) => x.replace(/\s+/g, ' ').trim();
+    const sql = norm(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../migrations/006_invoice_sequences_terms.sql'), 'utf8'));
+    for (const st of SEQUENCE_STATEMENTS) expect(sql).toContain(norm(st) + ';');
+    expect(sql).toContain(`ALTER TABLE invoices ADD COLUMN ${INVOICE_TERMS_COLUMN};`);
+    expect(SCHEMA_STATEMENTS.join('')).not.toContain('terms'); // additive: the 001 table is untouched
+  });
+});
+
+describe('invoice number helpers', () => {
+  it('sheetInvoiceNo shows only "No. 0006" while the stored value keeps the type', () => {
+    expect(sheetInvoiceNo('SI - 0006')).toBe('No. 0006'); expect(sheetInvoiceNo('SVI - 0013')).toBe('No. 0013');
+    expect(sheetInvoiceNo('SVI- 0726')).toBe('No. 0726'); expect(sheetInvoiceNo('SVI001')).toBe('No. 001'); expect(sheetInvoiceNo('SI - 10000')).toBe('No. 10000');
+    expect(sheetInvoiceNo('OLD-1')).toBe('No. OLD-1'); expect(sheetInvoiceNo('')).toBe('');
+  });
+  it('sequenceOf reads only plain SI/SVI + digits numbers of the asked type', () => {
+    expect(sequenceOf('SI - 09878', 'SI')).toBe(9878); expect(sequenceOf('SVI- 0726', 'SVI')).toBe(726); expect(sequenceOf('svi - 12', 'SVI')).toBe(12);
+    for (const [no, p] of [['SI - 0005', 'SVI'], ['SVI - 0005', 'SI'], ['SI - 2026-001', 'SI'], ['OLD-1', 'SI'], ['VI00123', 'SI'], ['SIGMA-9', 'SI']]) expect(sequenceOf(no, p)).toBe(null);
   });
 });
 
@@ -179,19 +279,17 @@ describe('existing invoices keep working', () => {
     const g = (await GET(`/api/invoices/${id}`)).body;
     expect(g.invoice_no).toBe('VI00123'); expect(g.amount).toBe(1234.56); expect(g.items).toEqual([{ product_service: 'Old Product', quantity: 1, unit_cost: 1234.56, amount: 1234.56 }]);
   });
-  it('editing keeps an unchanged older number exactly as stored, and re-prices from the items', async () => {
+  it('editing keeps an older number exactly as stored, and re-prices from the items', async () => {
     const id = await insertLegacy('SVI00456', 50000);
-    const u = await PUT(`/api/invoices/${id}`, { ...base, invoice_no: 'SVI00456', invoice_prefix: '', client_name: 'Old Client', items: [{ product_service: 'Old Product', unit_cost: '500', quantity: '1' }], remarks: 'edited' });
-    expect(u.status).toBe(200); expect(u.body.invoice_no).toBe('SVI00456'); expect(u.body.amount).toBe(500); expect(u.body.remarks).toBe('edited');
+    const u = await PUT(`/api/invoices/${id}`, { ...base, client_name: 'Old Client', items: [{ product_service: 'Old Product', unit_cost: '500', quantity: '1' }], remarks: 'edited' });
+    expect(u.status).toBe(200); expect(u.body.invoice_no).toBe('SVI00456'); expect(u.body.amount).toBe(500); expect(u.body.remarks).toBe('edited'); expect(u.body.terms).toBe('30-days');
   });
-  it('changing an older number applies the standard format; an invalid change is rejected', async () => {
+  it('an older number cannot be changed through the API', async () => {
     const id = await insertLegacy('VI00789', 10000);
     const items = [{ product_service: 'Old Product', unit_cost: '100', quantity: '1' }];
-    const bad = await PUT(`/api/invoices/${id}`, { ...base, invoice_no: 'VI00790', invoice_prefix: 'VI', client_name: 'Old Client', items });
-    expect(bad.status).toBe(422); expect(bad.body.error.fields.invoice_no).toBeTruthy();
+    const r = await PUT(`/api/invoices/${id}`, { ...base, invoice_no: 'SI - 00790', invoice_prefix: 'SI', client_name: 'Old Client', items });
+    expect(r.status).toBe(200); expect(r.body.invoice_no).toBe('VI00789');
     expect((await GET(`/api/invoices/${id}`)).body.invoice_no).toBe('VI00789');
-    const good = await PUT(`/api/invoices/${id}`, { ...base, invoice_no: '00790', invoice_prefix: 'SI', client_name: 'Old Client', items });
-    expect(good.status).toBe(200); expect(good.body.invoice_no).toBe('SI - 00790');
   });
   it('item rows saved before unit costs existed keep the stored amount (null unit cost; a single item carries the amount)', async () => {
     const db = raw();
@@ -252,12 +350,5 @@ describe('form helpers', () => {
   it('deriveUnitCost offers a unit cost only when it reproduces the stored amount exactly', () => {
     expect(deriveUnitCost(500, 1)).toBe('500.00'); expect(deriveUnitCost(250, 10)).toBe('25.00'); expect(deriveUnitCost(500, 3)).toBe(''); expect(deriveUnitCost(100, 0)).toBe('');
   });
-  it('invoiceNoFor keeps an unchanged existing number, otherwise standardizes', () => {
-    const form = { id: 1, original_invoice_no: 'SVI00123', invoice_prefix: 'SVI', invoice_number: '00123' };
-    expect(invoiceNoFor(form)).toEqual({ value: 'SVI00123', unchanged: true });
-    expect(invoiceNoFor({ ...form, invoice_number: '00124' })).toEqual({ value: 'SVI - 00124' });
-    expect(invoiceNoFor({ ...form, invoice_prefix: 'SI' })).toEqual({ value: 'SI - 00123' });
-    expect(invoiceNoFor({ invoice_prefix: 'SI', invoice_number: 'SI - SI - 9' })).toEqual({ value: 'SI - 9' });
-    expect(invoiceNoFor({ invoice_prefix: 'SVI', invoice_number: '' }).error).toBeTruthy();
-  });
+
 });

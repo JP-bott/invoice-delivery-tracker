@@ -1,5 +1,6 @@
 import { toCentavos } from './money.js';
-import { normalizeInvoiceNo } from '../../shared/invoiceNumber.js';
+import { isInvoicePrefix } from '../../shared/invoiceNumber.js';
+import { FIXED_TERMS } from '../database/schema.js';
 import { MAX_ITEMS, priceItems } from '../../shared/pricing.js';
 export const STATUSES = ['Pending', 'Partially Paid', 'Paid', 'Cancelled'];
 export const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
@@ -41,19 +42,22 @@ function cleanClientDetails(b, e, existing) {
   return { client_tin: one('client_tin', CLIENT_TIN_MAX, 'TIN'), client_address: one('client_address', CLIENT_ADDRESS_MAX, 'Address') };
 }
 
-// ctx.existingInvoiceNo: on update, an unchanged stored number (including older ones like "VI00123") is kept as it is.
+// Invoice numbers and terms are never taken from the request. A new invoice only chooses its type (b.invoice_prefix: SI or SVI);
+// the number itself is assigned by the server when it is saved (invoiceService.create). An existing invoice keeps its stored number
+// (ctx.existingInvoiceNo, including older formats like "VI00123") whatever the request says. Terms are always 30-days.
 // ctx.existing: the stored invoice on update (supplies the client TIN/address when the request omits them).
 export function validateInvoice(b = {}, ctx = {}) {
   const e = {}, t = (x) => (typeof x === 'string' ? x.trim() : '');
   const v = {
-    date_issued: t(b.date_issued), invoice_no: '', cr_no: t(b.cr_no) || null,
+    date_issued: t(b.date_issued), invoice_no: '', invoice_prefix: '', cr_no: t(b.cr_no) || null,
     client_name: t(b.client_name), product_service: '', due_date: t(b.due_date) || null,
     payment_status: b.payment_status, delivery_date: t(b.delivery_date) || null, remarks: t(b.remarks) || null,
   };
   if (!dateOk(v.date_issued)) e.date_issued = 'Valid date required';
-  const typedNo = typeof b.invoice_no === 'string' ? b.invoice_no.trim() : '';
-  if (ctx.existingInvoiceNo && typedNo === ctx.existingInvoiceNo) v.invoice_no = typedNo;
-  else { const n = normalizeInvoiceNo(b.invoice_no, b.invoice_prefix); if (n.error) e.invoice_no = n.error; else v.invoice_no = n.value; }
+  v.terms = FIXED_TERMS;
+  if (ctx.existingInvoiceNo) v.invoice_no = ctx.existingInvoiceNo;
+  else if (isInvoicePrefix(b.invoice_prefix)) v.invoice_prefix = b.invoice_prefix.trim().toUpperCase();
+  else e.invoice_prefix = 'Choose SI or SVI';
   if (!v.client_name) e.client_name = 'Required';
   Object.assign(v, cleanClientDetails(b, e, ctx.existing));
   const priced = cleanItems(b, e, t);

@@ -14,7 +14,7 @@ beforeAll(async () => {
 const call = (method, url, body) => { const u = new URL(url, 'http://x'); return handle({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body }); };
 const GET = (u) => call('GET', u); const POST = (u, b) => call('POST', u, b); const PUT = (u, b) => call('PUT', u, b); const DEL = (u) => call('DELETE', u);
 const base = { invoice_prefix: 'SVI', date_issued: '2026-10-01', product_service: 'P', amount: 100, payment_status: 'Pending', amount_paid: 0 };
-let n = 0; const inv = (extra = {}) => ({ ...base, invoice_no: `CL-${++n}`, client_name: 'Walk-in', ...extra });
+const inv = (extra = {}) => ({ ...base, client_name: 'Walk-in', ...extra });
 const mk = async (body) => { const r = await POST('/api/clients', body); expect(r.status).toBe(201); return r.body; };
 
 describe('clients API', () => {
@@ -76,7 +76,7 @@ describe('client details saved with an invoice', () => {
   });
   it('an update that leaves the details out keeps them; an empty string clears them; a new value replaces them', async () => {
     const r = await POST('/api/invoices', inv({ client_name: 'Golf', client_tin: '123-456-789', client_address: 'Pasig' }));
-    const url = `/api/invoices/${r.body.id}`, keep = { ...inv({ client_name: 'Golf' }), invoice_no: r.body.invoice_no, invoice_prefix: '' };
+    const url = `/api/invoices/${r.body.id}`, keep = { ...inv({ client_name: 'Golf' }), invoice_prefix: '' };
     expect((await PUT(url, keep)).body).toMatchObject({ client_tin: '123-456-789', client_address: 'Pasig' });
     expect((await PUT(url, { ...keep, client_tin: '987-654-321', client_address: 'Makati' })).body).toMatchObject({ client_tin: '987-654-321', client_address: 'Makati' });
     const cleared = (await PUT(url, { ...keep, client_tin: '', client_address: '   ' })).body;

@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react';
 import Modal from '../Modal.jsx';
 import { computeTotals } from '../../../../shared/pricing.js';
 import { money, sheetPricing } from '../../utils/sheetPricing.js';
+import { sheetInvoiceNo } from '../../utils/invoiceNo.js';
 import './invoice-sheet.css';
 
 const ROWS = 14; // fits one A5 page once the sheet is rendered with real text
@@ -16,7 +17,7 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
   const { rows, total } = sheetPricing(invoice);
   const t = computeTotals(total, type, whtRate);
   const vatable = type === 'vatable';
-  const invoiceNo = invoice.invoice_no || ''; // only the actual SVI/SI number; nothing else is generated or appended
+  const invoiceNo = invoice.invoice_no || ''; // stored value ("SI - 0006"); the sheet shows only "No. 0006"
   if (invoice.remarks) rows.push({ q: '', d: invoice.remarks, u: '', a: '', sub: true });
   while (rows.length < ROWS) rows.push({ q: '', d: '', u: '', a: '' });
   return (
@@ -29,11 +30,11 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
       </header>
       <div className="title-row">
         <div className="t">SERVICE <b>INVOICE</b></div>
-        <div className="no"><span>{invoiceNo}</span></div>
+        <div className="no"><span>{sheetInvoiceNo(invoiceNo)}</span></div>
       </div>
       <table className="info"><tbody>
         <tr><td colSpan="2"><div className="cell">Billed to: <span className="v">{invoice.client_name}</span></div></td><td className="r"><div className="cell">Date: <span className="v">{longDate(invoice.date_issued)}</span></div></td></tr>
-        <tr><td colSpan="2" rowSpan="2"><div className="cell addr">Address: <span className="v">{invoice.client_address || ''}</span></div></td><td className="r"><div className="cell">Terms: <span className="v">{invoice.due_date ? `Due ${longDate(invoice.due_date)}` : ''}</span></div></td></tr>
+        <tr><td colSpan="2" rowSpan="2"><div className="cell addr">Address: <span className="v">{invoice.client_address || ''}</span></div></td><td className="r"><div className="cell">Terms: <span className="v">{invoice.terms || '30-days'}</span></div></td></tr>
         <tr><td className="r"><div className="cell">P.O. No.: <span className="v" /></div></td></tr>
         <tr><td colSpan="3"><div className="cell">TIN: <span className="v">{invoice.client_tin || ''}</span></div></td></tr>
       </tbody></table>
@@ -42,13 +43,13 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
         <tbody>{rows.map((r, i) => <tr key={i}><td className="qty">{r.q}</td><td className={`d ${r.sub ? 'sub' : ''}`}>{r.d}</td><td className="unit">{r.u}</td><td className="amt">{r.a}</td></tr>)}</tbody>
       </table>
       <table className="totals"><tbody>
-        <tr><td className="c1 val" /><td className="c2" /><td className="c3 lbl">Total Sales (Vat Inclusive)</td><td className="c4 val">{show(t.total)}</td></tr>
+        <tr><td className="c1" /><td className="c2" /><td className="c3 lbl">Total Sales (Vat Inclusive)</td><td className="c4 val">{show(t.total)}</td></tr>
         <tr><td className="c1" /><td className="c2" /><td className="lbl">Less: VAT</td><td className="val">{show(t.vat, t.has && vatable)}</td></tr>
         <tr><td className="c1" /><td className="c2" /><td className="lbl">Amount: Net of VAT</td><td className="val">{show(t.net)}</td></tr>
-        <tr><td className="c1 val">{show(t.sV, t.has && vatable)}</td><td className="c2 lbl">VATable Sales</td><td className="lbl">Amount Due</td><td className="val">{show(t.net)}</td></tr>
-        <tr><td className="c1 val">{show(t.sE, t.has && type === 'exempt')}</td><td className="c2 lbl">VAT-Exempt Sales</td><td className="lbl">Add: VAT</td><td className="val">{show(t.vat, t.has && vatable)}</td></tr>
-        <tr><td className="c1 val">{show(t.sZ, t.has && type === 'zero')}</td><td className="c2 lbl">Zero Rated Sales</td><td className="lbl">Less:&nbsp; Withholding Tax</td><td className="val">{show(t.wht, t.has && whtRate > 0)}</td></tr>
-        <tr><td className="c1 val">{show(t.vat, t.has && vatable)}</td><td className="c2 lbl">VAT-Amount</td><td className="lbl grand">Total Amount Due</td><td className="val grand">{show(t.grand)}</td></tr>
+        <tr><td className="c1 lbl">VATable Sales</td><td className="c2 val">{show(t.sV, t.has && vatable)}</td><td className="lbl">Amount Due</td><td className="val">{show(t.net)}</td></tr>
+        <tr><td className="c1 lbl">VAT-Exempt Sales</td><td className="c2 val">{show(t.sE, t.has && type === 'exempt')}</td><td className="lbl">Add: VAT</td><td className="val">{show(t.vat, t.has && vatable)}</td></tr>
+        <tr><td className="c1 lbl">Zero Rated Sales</td><td className="c2 val">{show(t.sZ, t.has && type === 'zero')}</td><td className="lbl">Less:&nbsp; Withholding Tax</td><td className="val">{show(t.wht, t.has && whtRate > 0)}</td></tr>
+        <tr><td className="c1 lbl">VAT-Amount</td><td className="c2 val">{show(t.vat, t.has && vatable)}</td><td className="lbl grand">Total Amount Due</td><td className="val grand">{show(t.grand)}</td></tr>
       </tbody></table>
       <p className="note">Note:&nbsp; Please make all checks payable to <b>QUANDATICS INC.</b></p>
       <div className="sign"><div className="box"><div className="line">By:<span className="u" /></div>Authorized Signature Over Printed Name</div></div>

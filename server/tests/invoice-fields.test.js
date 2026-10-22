@@ -16,7 +16,7 @@ beforeAll(async () => {
 const call = (method, url, body) => { const u = new URL(url, 'http://x'); return handle({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body }); };
 const GET = (u) => call('GET', u); const POST = (u, b) => call('POST', u, b); const PUT = (u, b) => call('PUT', u, b); const DEL = (u) => call('DELETE', u);
 const base = { invoice_prefix: 'SVI', date_issued: '2026-10-01', client_name: 'A', product_service: 'P', amount: 100, payment_status: 'Pending', amount_paid: 0 };
-let n = 0; const inv = (extra = {}) => ({ ...base, invoice_no: `CF-${++n}`, ...extra });
+const inv = (extra = {}) => ({ ...base, ...extra });
 // Archive every active field (what a user with no custom fields configured sees).
 const clearFields = async () => { for (const f of (await GET('/api/invoice-fields')).body) await DEL(`/api/invoice-fields/${f.id}`); };
 const mk = async (def) => { const r = await POST('/api/invoice-fields', def); expect(r.status).toBe(201); return r.body; };
@@ -90,38 +90,42 @@ describe('custom values on invoices', () => {
     await t('Notes', 'x'.repeat(2001), false);
   });
   it('persists values with the invoice and returns them from get and list', async () => {
-    const c = await POST('/api/invoices', inv({ invoice_no: 'CF-PERSIST', custom_fields: cfv({ 'PO Number': 'PO-77', Weight: '1,200.50', Region: 'south', Rush: 'true', Notes: 'Handle with care' }) }));
+    const c = await POST('/api/invoices', inv({ custom_fields: cfv({ 'PO Number': 'PO-77', Weight: '1,200.50', Region: 'south', Rush: 'true', Notes: 'Handle with care' }) }));
     expect(c.status).toBe(201);
     const cf = c.body.custom_fields;
     expect(cf[ids['PO Number']]).toBe('PO-77'); expect(cf[ids.Weight]).toBe('1200.5'); expect(cf[ids.Region]).toBe('South'); expect(cf[ids.Rush]).toBe('true');
     expect((await GET(`/api/invoices/${c.body.id}`)).body.custom_fields[ids.Notes]).toBe('Handle with care');
-    const row = (await GET('/api/invoices?q=CF-PERSIST')).body.data[0];
+    const row = (await GET(`/api/invoices?q=${encodeURIComponent(c.body.invoice_no)}`)).body.data[0];
     expect(row.custom_fields[ids['PO Number']]).toBe('PO-77');
   });
   it('updates, clears values, and leaves unsent fields untouched', async () => {
-    const c = await POST('/api/invoices', inv({ invoice_no: 'CF-UPD', custom_fields: cfv({ 'PO Number': 'PO-1', Weight: '5', Rush: 'true' }) }));
+    const c = await POST('/api/invoices', inv({ custom_fields: cfv({ 'PO Number': 'PO-1', Weight: '5', Rush: 'true' }) }));
     const id = c.body.id;
     // payload from an older browser tab: no custom_fields at all -> nothing is lost
-    const stale = await PUT(`/api/invoices/${id}`, inv({ invoice_no: 'CF-UPD', client_name: 'Changed' }));
+    const stale = await PUT(`/api/invoices/${id}`, inv({ client_name: 'Changed' }));
     expect(stale.status).toBe(200); expect(stale.body.custom_fields[ids.Weight]).toBe('5'); expect(stale.body.custom_fields[ids['PO Number']]).toBe('PO-1');
-    const u = await PUT(`/api/invoices/${id}`, inv({ invoice_no: 'CF-UPD', custom_fields: cfv({ 'PO Number': 'PO-2', Weight: '', Rush: 'false' }) }));
+    const u = await PUT(`/api/invoices/${id}`, inv({ custom_fields: cfv({ 'PO Number': 'PO-2', Weight: '', Rush: 'false' }) }));
     expect(u.body.custom_fields[ids['PO Number']]).toBe('PO-2'); expect(u.body.custom_fields[ids.Weight]).toBeUndefined(); expect(u.body.custom_fields[ids.Rush]).toBeUndefined();
     // a required field cannot be cleared
-    expect((await PUT(`/api/invoices/${id}`, inv({ invoice_no: 'CF-UPD', custom_fields: cfv({ 'PO Number': '' }) }))).status).toBe(422);
+    expect((await PUT(`/api/invoices/${id}`, inv({ custom_fields: cfv({ 'PO Number': '' }) }))).status).toBe(422);
   });
   it('ignores unknown field ids and rejects a malformed payload', async () => {
     const ok = await POST('/api/invoices', inv({ custom_fields: { ...cfv({ 'PO Number': 'PO-9' }), 424242: 'ghost' } }));
     expect(ok.status).toBe(201); expect(ok.body.custom_fields[424242]).toBeUndefined();
     expect((await POST('/api/invoices', inv({ custom_fields: ['x'] }))).status).toBe(422);
   });
-  it('does not store values for a failed invoice save (atomic)', async () => {
-    const dup = await POST('/api/invoices', inv({ invoice_no: 'cf-persist', custom_fields: cfv({ 'PO Number': 'PO-DUP' }) }));
-    expect(dup.status).toBe(409);
+  it('a save whose number collides is retried as one unit: values stored once, no orphans', async () => {
     const db = createClient({ url: 'file:' + dbFile });
-    expect(Number((await db.execute(`SELECT COUNT(*) c FROM invoice_custom_values WHERE value = 'PO-DUP'`)).rows[0].c)).toBe(0);
+    const last = Number((await db.execute(`SELECT last_number n FROM invoice_sequences WHERE prefix = 'SVI'`)).rows[0].n);
+    const taken = `SVI - ${String(last + 1).padStart(4, '0')}`; // the number the counter is about to hand out, already in use
+    await db.execute({ sql: `INSERT INTO invoices (date_issued,invoice_no,client_name,product_service,amount_centavos,amount_paid_centavos,payment_status,created_at,updated_at) VALUES ('2026-01-01',?,'Imported','X',100,0,'Pending','t','t')`, args: [taken] });
+    const r = await POST('/api/invoices', inv({ custom_fields: cfv({ 'PO Number': 'PO-DUP' }) }));
+    expect(r.status).toBe(201); expect(r.body.invoice_no).not.toBe(taken);
+    expect(Number((await db.execute(`SELECT COUNT(*) c FROM invoice_custom_values WHERE value = 'PO-DUP'`)).rows[0].c)).toBe(1);
     const orphans = (await db.execute('SELECT COUNT(*) c FROM invoice_custom_values WHERE invoice_id NOT IN (SELECT id FROM invoices)')).rows[0].c;
     expect(Number(orphans)).toBe(0);
   });
+
   it('updating a missing invoice stores nothing', async () => {
     expect((await PUT('/api/invoices/777777', inv({ custom_fields: cfv({ 'PO Number': 'PO-GHOST' }) }))).status).toBe(404);
     const db = createClient({ url: 'file:' + dbFile });
@@ -133,8 +137,8 @@ describe('search and filtering', () => {
   let ids = {};
   beforeAll(async () => {
     const f = (await GET('/api/invoice-fields')).body; for (const x of f) ids[x.label] = x.id;
-    await POST('/api/invoices', inv({ invoice_no: 'SRCH-1', custom_fields: { [ids['PO Number']]: 'ZEBRA-100', [ids.Weight]: '10', [ids.Region]: 'North', [ids.Rush]: 'true', [ids['Delivered On']]: '2026-10-10' } }));
-    await POST('/api/invoices', inv({ invoice_no: 'SRCH-2', custom_fields: { [ids['PO Number']]: 'LION-200', [ids.Weight]: '20', [ids.Region]: 'South', [ids['Delivered On']]: '2026-10-11' } }));
+    await POST('/api/invoices', inv({ client_name: 'SrchCo', custom_fields: { [ids['PO Number']]: 'ZEBRA-100', [ids.Weight]: '10', [ids.Region]: 'North', [ids.Rush]: 'true', [ids['Delivered On']]: '2026-10-10' } }));
+    await POST('/api/invoices', inv({ client_name: 'SrchCo', custom_fields: { [ids['PO Number']]: 'LION-200', [ids.Weight]: '20', [ids.Region]: 'South', [ids['Delivered On']]: '2026-10-11' } }));
   });
   const total = async (qs) => (await GET(`/api/invoices?${qs}`)).body.total;
   it('global search matches custom values (but not checkbox words, and escapes wildcards)', async () => {
@@ -145,16 +149,16 @@ describe('search and filtering', () => {
     const k = (l) => `cf_${ids[l]}`;
     expect(await total(`${k('PO Number')}=zebra`)).toBe(1);
     expect(await total(`${k('Region')}=south`)).toBe(await total(`${k('Region')}=South`));
-    expect(await total(`${k('Region')}=North&q=SRCH`)).toBe(1);
+    expect(await total(`${k('Region')}=North&q=SrchCo`)).toBe(1);
     expect(await total(`${k('Weight')}=20.0`)).toBe(1); expect(await total(`${k('Weight')}=abc`)).toBe(0);
     expect(await total(`${k('Delivered On')}=2026-10-10`)).toBe(1);
-    expect(await total(`${k('Rush')}=true&q=SRCH`)).toBe(1);
-    expect(await total(`${k('Rush')}=false&q=SRCH`)).toBe(1); // unchecked = no stored value
+    expect(await total(`${k('Rush')}=true&q=SrchCo`)).toBe(1);
+    expect(await total(`${k('Rush')}=false&q=SrchCo`)).toBe(1); // unchecked = no stored value
     expect(await total(`${k('PO Number')}=zebra&${k('Region')}=South`)).toBe(0);
   });
   it('ignores filters for unknown or archived fields', async () => {
-    const all = await total('q=SRCH');
-    expect(await total('cf_999999=x&q=SRCH')).toBe(all);
+    const all = await total('q=SrchCo');
+    expect(await total('cf_999999=x&q=SrchCo')).toBe(all);
   });
   it('buildWhere without custom fields (dashboard) is unchanged', () => {
     expect(buildWhere({ q: 'x', cf_1: 'y' }).args).toEqual(Array(4).fill('%x%'));
@@ -165,7 +169,7 @@ describe('modifying and deleting fields never loses invoice data', () => {
   beforeAll(clearFields);
   it('archiving hides the field everywhere but keeps its values; restoring brings them back', async () => {
     const f = await mk({ label: 'Warehouse', input_type: 'text' });
-    const c = await POST('/api/invoices', inv({ invoice_no: 'ARCH-1', custom_fields: { [f.id]: 'WH-9' } }));
+    const c = await POST('/api/invoices', inv({ custom_fields: { [f.id]: 'WH-9' } }));
     const a = await DEL(`/api/invoice-fields/${f.id}`);
     expect(a.status).toBe(200); expect(a.body.archived).toBe(true); expect(a.body.value_count).toBe(1);
     expect((await GET('/api/invoice-fields')).body.some((x) => x.id === f.id)).toBe(false);
@@ -174,14 +178,14 @@ describe('modifying and deleting fields never loses invoice data', () => {
     expect((await GET('/api/invoices?q=WH-9')).body.total).toBe(0);
     expect((await PUT(`/api/invoice-fields/${f.id}`, { label: 'Warehouse', input_type: 'text' })).status).toBe(404);
     // saving the invoice while the field is archived keeps the hidden value
-    expect((await PUT(`/api/invoices/${c.body.id}`, inv({ invoice_no: 'ARCH-1', client_name: 'B', custom_fields: { [f.id]: 'IGNORED' } }))).status).toBe(200);
+    expect((await PUT(`/api/invoices/${c.body.id}`, inv({ client_name: 'B', custom_fields: { [f.id]: 'IGNORED' } }))).status).toBe(200);
     const r = await POST(`/api/invoice-fields/${f.id}/restore`);
     expect(r.status).toBe(200); expect(r.body.archived).toBe(false);
     expect((await GET(`/api/invoices/${c.body.id}`)).body.custom_fields[f.id]).toBe('WH-9');
   });
   it('restore refuses a label that is now taken; permanent delete needs archive first and removes values', async () => {
     const f = await mk({ label: 'Branch', input_type: 'text' });
-    const c = await POST('/api/invoices', inv({ invoice_no: 'ARCH-2', custom_fields: { [f.id]: 'B-1' } }));
+    const c = await POST('/api/invoices', inv({ custom_fields: { [f.id]: 'B-1' } }));
     expect((await DEL(`/api/invoice-fields/${f.id}?permanent=1`)).status).toBe(409);
     await DEL(`/api/invoice-fields/${f.id}`);
     const twin = await mk({ label: 'branch', input_type: 'text' });
@@ -205,26 +209,26 @@ describe('modifying and deleting fields never loses invoice data', () => {
   });
   it('removing or renaming a dropdown option keeps existing invoice values editable', async () => {
     const f = await mk({ label: 'Tier', input_type: 'dropdown', options: ['Gold', 'Silver'] });
-    const c = await POST('/api/invoices', inv({ invoice_no: 'TIER-1', custom_fields: { [f.id]: 'Silver' } }));
+    const c = await POST('/api/invoices', inv({ custom_fields: { [f.id]: 'Silver' } }));
     await PUT(`/api/invoice-fields/${f.id}`, { label: 'Tier', input_type: 'dropdown', options: ['Gold', 'Platinum'] });
     expect((await GET(`/api/invoices/${c.body.id}`)).body.custom_fields[f.id]).toBe('Silver'); // data kept
-    const same = await PUT(`/api/invoices/${c.body.id}`, inv({ invoice_no: 'TIER-1', remarks: 'edited', custom_fields: { [f.id]: 'Silver' } }));
+    const same = await PUT(`/api/invoices/${c.body.id}`, inv({ remarks: 'edited', custom_fields: { [f.id]: 'Silver' } }));
     expect(same.status).toBe(200); expect(same.body.custom_fields[f.id]).toBe('Silver'); // unchanged legacy value still saves
     expect((await POST('/api/invoices', inv({ custom_fields: { [f.id]: 'Silver' } }))).status).toBe(422); // but not for new invoices
-    expect((await PUT(`/api/invoices/${c.body.id}`, inv({ invoice_no: 'TIER-1', custom_fields: { [f.id]: 'Platinum' } }))).status).toBe(200);
+    expect((await PUT(`/api/invoices/${c.body.id}`, inv({ custom_fields: { [f.id]: 'Platinum' } }))).status).toBe(200);
   });
   it('a newly required field blocks only the next save of old invoices, never reads', async () => {
     const f = await mk({ label: 'Approver', input_type: 'text' });
-    const c = await POST('/api/invoices', inv({ invoice_no: 'REQ-1' }));
+    const c = await POST('/api/invoices', inv());
     await PUT(`/api/invoice-fields/${f.id}`, { label: 'Approver', input_type: 'text', required: true });
     expect((await GET(`/api/invoices/${c.body.id}`)).status).toBe(200);
-    const r = await PUT(`/api/invoices/${c.body.id}`, inv({ invoice_no: 'REQ-1' }));
+    const r = await PUT(`/api/invoices/${c.body.id}`, inv());
     expect(r.status).toBe(422); expect(r.body.error.fields[`cf_${f.id}`]).toBe('Required');
     await DEL(`/api/invoice-fields/${f.id}`);
   });
   it('deleting an invoice removes its custom values', async () => {
     const f = await mk({ label: 'Ticket', input_type: 'text' });
-    const c = await POST('/api/invoices', inv({ invoice_no: 'DELV-1', custom_fields: { [f.id]: 'T-1' } }));
+    const c = await POST('/api/invoices', inv({ custom_fields: { [f.id]: 'T-1' } }));
     expect((await DEL(`/api/invoices/${c.body.id}`)).status).toBe(204);
     const db = createClient({ url: 'file:' + dbFile });
     expect(Number((await db.execute({ sql: 'SELECT COUNT(*) c FROM invoice_custom_values WHERE invoice_id = ?', args: [c.body.id] })).rows[0].c)).toBe(0);
@@ -249,9 +253,9 @@ describe('existing features still work with custom fields present', () => {
   });
   it('invoices work with no active custom fields (default state)', async () => {
     await clearFields();
-    const r = await POST('/api/invoices', inv({ invoice_no: 'PLAIN-1' }));
+    const r = await POST('/api/invoices', inv());
     expect(r.status).toBe(201); expect(r.body.custom_fields).toEqual({});
-    expect((await GET('/api/invoices?q=PLAIN-1')).body.total).toBe(1);
+    expect((await GET(`/api/invoices?q=${encodeURIComponent(r.body.invoice_no)}`)).body.total).toBe(1);
   });
 });
 

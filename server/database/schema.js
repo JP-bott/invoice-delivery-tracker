@@ -82,6 +82,21 @@ export const CLIENT_STATEMENTS = [
 // 001 table and its rows are untouched. NULL means the invoice was saved before clients existed or without a registered client.
 export const INVOICE_CLIENT_COLUMNS = ['client_tin', 'client_address'];
 
+// Invoice numbering and fixed payment terms (migrations/006_invoice_sequences_terms.sql mirrors this; a test keeps them in sync).
+// invoice_sequences holds the last number ever assigned per type (SI, SVI). It only moves forward, so a number is never handed out
+// twice, even after its invoice is deleted or cancelled. initSchema seeds each row from the highest existing number of that type.
+export const SEQUENCE_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS invoice_sequences (
+    prefix TEXT PRIMARY KEY CHECK (prefix IN ('SI','SVI')),
+    last_number INTEGER NOT NULL DEFAULT 0 CHECK (last_number >= 0))`,
+];
+export const SEQUENCE_PREFIXES = ['SI', 'SVI'];
+
+// Payment terms are always 30-days. Added to invoices with ALTER TABLE ADD COLUMN (initSchema skips it if present); the DEFAULT gives
+// every existing invoice the same value without rewriting rows.
+export const FIXED_TERMS = '30-days';
+export const INVOICE_TERMS_COLUMN = `terms TEXT NOT NULL DEFAULT '30-days' CHECK (terms = '30-days')`;
+
 export const INVOICE_COLUMNS = [
   'id', 'date_issued', 'invoice_no', 'cr_no', 'client_name', 'product_service', 'due_date',
   'amount_centavos', 'amount_paid_centavos', 'payment_status', 'delivery_date', 'remarks', 'created_at', 'updated_at',

@@ -9,7 +9,7 @@ beforeAll(async () => {
 const call = (method, url, body) => { const u = new URL(url, 'http://x'); return handle({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body }); };
 const GET = (u) => call('GET', u); const POST = (u, b) => call('POST', u, b); const PUT = (u, b) => call('PUT', u, b); const DEL = (u) => call('DELETE', u);
 const base = { invoice_prefix: 'SVI', date_issued: '2026-10-05', client_name: 'Beta', product_service: 'P', amount: 100, payment_status: 'Pending', amount_paid: 0 };
-let n = 0; const inv = (x = {}) => ({ ...base, invoice_no: `DF-${++n}`, ...x });
+const inv = (x = {}) => ({ ...base, ...x });
 const filters = async () => (await GET('/api/dashboard-filters')).body.filters;
 const save = (list) => PUT('/api/dashboard-filters', { filters: list.map(({ key, enabled }) => ({ key, enabled })) });
 let region, rush;

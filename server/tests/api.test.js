@@ -38,31 +38,33 @@ describe('validation', () => {
   it('delivery before issue', () => expect(v({ delivery_date: '2026-09-01' }).delivery_date).toBeTruthy());
 });
 describe('invoices API', () => {
-  it('CRUD + duplicates', async () => {
+  it('CRUD; client-supplied numbers and terms are ignored', async () => {
     const c = await POST('/api/invoices', base); expect(c.status).toBe(201);
+    expect(c.body.invoice_no).toBe('SVI - 0001'); expect(c.body.terms).toBe('30-days');
     expect(c.body.outstanding).toBe(1250.75); expect(c.body.deliveryStatus).toBe('Pending');
-    for (const n of ['inv-001', ' INV-001 ']) expect((await POST('/api/invoices', { ...base, invoice_no: n })).status).toBe(409);
-    const o = await POST('/api/invoices', { ...base, invoice_no: 'INV-002' });
-    expect((await PUT(`/api/invoices/${o.body.id}`, { ...base, invoice_no: 'inv-001' })).status).toBe(409);
+    const o = await POST('/api/invoices', { ...base, invoice_no: 'SVI - 0001', terms: '60-days' });
+    expect(o.status).toBe(201); expect(o.body.invoice_no).toBe('SVI - 0002'); expect(o.body.terms).toBe('30-days');
+    const u = await PUT(`/api/invoices/${o.body.id}`, { ...base, invoice_no: 'SVI - 0001', terms: 'COD' });
+    expect(u.status).toBe(200); expect(u.body.invoice_no).toBe('SVI - 0002'); expect(u.body.terms).toBe('30-days');
     expect((await GET('/api/invoices/9999')).status).toBe(404);
     expect((await DEL(`/api/invoices/${o.body.id}`)).status).toBe(204);
   });
   it('validation errors are 422 with fields', async () => {
-    const r = await POST('/api/invoices', { ...base, invoice_no: '' }); expect(r.status).toBe(422); expect(r.body.error.fields.invoice_no).toBeTruthy();
+    const r = await POST('/api/invoices', { ...base, invoice_prefix: '' }); expect(r.status).toBe(422); expect(r.body.error.fields.invoice_prefix).toBeTruthy();
   });
   it('list filters, whitelist, wildcard escape', async () => {
     expect((await GET('/api/invoices?sortBy=amount;DROP')).status).toBe(400);
     expect((await GET('/api/invoices?sortBy=constructor')).status).toBe(400);
     expect((await GET('/api/invoices?q=%25')).body.total).toBe(0);
-    expect((await GET('/api/invoices?q=inv-001&paymentStatus=Pending')).body.total).toBe(1);
+    expect((await GET('/api/invoices?q=svi%20-%200001&paymentStatus=Pending')).body.total).toBe(1);
   });
   it('dashboard summary', async () => {
     const s = (await GET('/api/dashboard/summary')).body;
     expect(s.totalInvoices).toBe(1); expect(s.pendingPayments).toBe(1250.75);
   });
   it('dashboard invoice status groups unpaid invoices by issue date', async () => {
-    const overdue = await POST('/api/invoices', { ...base, invoice_no: 'INV-OVERDUE', date_issued: '2026-09-30', amount: 200, amount_paid: 50, payment_status: 'Partially Paid' });
-    const incoming = await POST('/api/invoices', { ...base, invoice_no: 'INV-INCOMING', date_issued: '2026-11-01', amount: 300 });
+    const overdue = await POST('/api/invoices', { ...base, date_issued: '2026-09-30', amount: 200, amount_paid: 50, payment_status: 'Partially Paid' });
+    const incoming = await POST('/api/invoices', { ...base, date_issued: '2026-11-01', amount: 300 });
     const status = (await GET('/api/dashboard/invoice-status?dateFrom=2026-10-01&dateTo=2026-10-31')).body;
     expect(status.buckets.overdue).toEqual({ value: 15000, count: 1 });
     expect(status.buckets.dueMonth).toEqual({ value: 125075, count: 1 });
@@ -71,13 +73,13 @@ describe('invoices API', () => {
     await DEL(`/api/invoices/${incoming.body.id}`);
   });
   it('persists due dates and classifies receivables without overlap', async () => {
-    const overdue = await POST('/api/invoices', { ...base, invoice_no: 'INV-DUE-OVER', date_issued: '2026-09-01', due_date: '2026-10-15', amount: 200 });
-    const later = await POST('/api/invoices', { ...base, invoice_no: 'INV-DUE-LATER', date_issued: '2026-10-01', due_date: '2026-11-20', amount: 300, client_name: 'B' });
+    const overdue = await POST('/api/invoices', { ...base, date_issued: '2026-09-01', due_date: '2026-10-15', amount: 200 });
+    const later = await POST('/api/invoices', { ...base, date_issued: '2026-10-01', due_date: '2026-11-20', amount: 300, client_name: 'B' });
     expect(overdue.body.due_date).toBe('2026-10-15');
     const analytics = (await GET('/api/dashboard/analytics?asOf=2026-10-16&dateFrom=2026-10-01&dateTo=2026-10-31')).body;
     const records = analytics.receivables.categories.flatMap((category) => category.records);
-    expect(records.map((record) => record.invoice_no)).toContain('SVI - INV-DUE-OVER');
-    expect(records.map((record) => record.invoice_no)).toContain('SVI - INV-DUE-LATER');
+    expect(records.map((record) => record.invoice_no)).toContain(overdue.body.invoice_no);
+    expect(records.map((record) => record.invoice_no)).toContain(later.body.invoice_no);
     expect(new Set(records.map((record) => record.invoice_no)).size).toBe(records.length);
     await DEL(`/api/invoices/${overdue.body.id}`);
     await DEL(`/api/invoices/${later.body.id}`);
@@ -90,10 +92,11 @@ describe('invoices API', () => {
     expect((await GET('/api/nothing')).status).toBe(404);
   });
   it('dashboard excludes Cancelled except distribution and recent list', async () => {
-    expect((await POST('/api/invoices', { ...base, invoice_no: 'INV-CXL', amount: 500, payment_status: 'Cancelled' })).status).toBe(201);
+    const cxl = await POST('/api/invoices', { ...base, amount: 500, payment_status: 'Cancelled' });
+    expect(cxl.status).toBe(201);
     expect((await GET('/api/dashboard/summary')).body.totalInvoices).toBe(1);
     expect((await GET('/api/dashboard/payment-distribution')).body.find((d) => d.status === 'Cancelled').count).toBe(1);
-    expect((await GET('/api/dashboard/recent-invoices')).body.some((r) => r.invoice_no === 'SVI - INV-CXL')).toBe(true);
+    expect((await GET('/api/dashboard/recent-invoices')).body.some((r) => r.invoice_no === cxl.body.invoice_no)).toBe(true);
   });
   it('paginates, persists, and lists filter options', async () => {
     const r = (await GET('/api/invoices?pageSize=10&page=1&sortBy=amount&sortDir=asc')).body;
@@ -102,7 +105,7 @@ describe('invoices API', () => {
     expect((await GET('/api/filters/products')).body).toContain('P');
   });
   it('accepts formatted amounts without changing numeric storage', async () => {
-    const r = await POST('/api/invoices', { ...base, invoice_no: 'SVI-FMT', amount: '1,500.50', amount_paid: '0.00' });
+    const r = await POST('/api/invoices', { ...base, amount: '1,500.50', amount_paid: '0.00' });
     expect(r.status).toBe(201);
     expect(r.body.amount).toBe(1500.5);
     expect(r.body.outstanding).toBe(1500.5);
@@ -110,17 +113,17 @@ describe('invoices API', () => {
   it('keeps dashboard metrics synchronized through invoice lifecycle changes', async () => {
     const query = 'dateFrom=2026-10-15&dateTo=2026-10-20';
     const before = (await GET(`/api/dashboard/summary?${query}`)).body;
-    const created = await POST('/api/invoices', { ...base, date_issued: '2026-10-16', invoice_no: 'SVI-SYNC-00123', product_service: 'Sync Service', amount: '1,000.00', amount_paid: 0 });
+    const created = await POST('/api/invoices', { ...base, date_issued: '2026-10-16', product_service: 'Sync Service', amount: '1,000.00', amount_paid: 0 });
     expect(created.status).toBe(201);
     let summary = (await GET(`/api/dashboard/summary?${query}`)).body;
     expect(summary.totalInvoices).toBe(before.totalInvoices + 1);
     expect(summary.totalValue).toBeCloseTo(before.totalValue + 1000);
-    const updated = await PUT(`/api/invoices/${created.body.id}`, { ...base, date_issued: '2026-10-16', invoice_no: 'SI00123', invoice_prefix: 'SI', product_service: 'Updated Service', amount: '2,000.00', amount_paid: '2,000.00', payment_status: 'Paid' });
+    const updated = await PUT(`/api/invoices/${created.body.id}`, { ...base, date_issued: '2026-10-16', product_service: 'Updated Service', amount: '2,000.00', amount_paid: '2,000.00', payment_status: 'Paid' });
     expect(updated.status).toBe(200);
     summary = (await GET(`/api/dashboard/summary?${query}`)).body;
     expect(summary.totalValue).toBeCloseTo(before.totalValue + 2000);
     expect(summary.totalCollected).toBeCloseTo(before.totalCollected + 2000);
-    expect((await GET('/api/invoices?q=SI%20-%2000123&product=Updated%20Service&paymentStatus=Paid')).body.total).toBe(1);
+    expect((await GET(`/api/invoices?q=${encodeURIComponent(created.body.invoice_no)}&product=Updated%20Service&paymentStatus=Paid`)).body.total).toBe(1);
     expect((await DEL(`/api/invoices/${created.body.id}`)).status).toBe(204);
     summary = (await GET(`/api/dashboard/summary?${query}`)).body;
     expect(summary.totalInvoices).toBe(before.totalInvoices);

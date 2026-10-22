@@ -1,17 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye, Loader2, Plus, Trash2 } from 'lucide-react';
 import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
 import { valueOf } from '../../utils/customFields.js';
 import { MAX_ITEMS, blankItem, sanitizeDecimal } from '../../utils/items.js';
 import { priceItems } from '../../../../shared/pricing.js';
-import { invoiceNoFor } from '../../utils/invoiceNo.js';
+import { api } from '../../utils/api.js';
+import { splitInvoiceNo } from '../../utils/invoiceNo.js';
 import Modal from '../Modal.jsx';
 import { HoverCard } from '../ui.jsx';
 import InvoicePreview from './InvoicePreview.jsx';
 import ClientCombobox from './ClientCombobox.jsx';
 
-const required = new Set(['date_issued', 'invoice_number', 'client_name']);
+const required = new Set(['date_issued', 'client_name']);
+const TERMS = '30-days'; // display only: the server always saves 30-days
 const PREFIXES = ['SVI', 'SI'];
 const hiddenPaidStatuses = new Set(['Pending', 'No', 'Cancelled']);
 
@@ -31,8 +33,21 @@ function Group({ id, title, description, children }) {
 export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, products = [], clients = [], fields = [], saving = false }) {
   const [preview, setPreview] = useState(false);
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
-  const setInvoicePart = (key) => (event) => setForm({ ...form, [key]: event.target.value });
-  const invoiceNo = invoiceNoFor(form); // { value } | { error }: what would be saved (shown as a hint and in the preview)
+  // Invoice numbers are assigned by the server when the invoice is saved. For a new invoice this is only a suggestion (a read-only
+  // request that consumes nothing), refreshed whenever the type changes; an existing invoice always shows its stored number.
+  const isNew = !form.id;
+  const [suggested, setSuggested] = useState({ prefix: '', number: '', failed: false });
+  useEffect(() => {
+    if (!isNew) return undefined;
+    let current = true;
+    setSuggested({ prefix: form.invoice_prefix, number: '', failed: false });
+    api(`/api/invoices/next-number?prefix=${encodeURIComponent(form.invoice_prefix)}`)
+      .then((r) => current && setSuggested({ prefix: form.invoice_prefix, number: r.number, failed: false }))
+      .catch(() => current && setSuggested({ prefix: form.invoice_prefix, number: '', failed: true }));
+    return () => { current = false; };
+  }, [isNew, form.invoice_prefix]);
+  const shownNo = isNew ? (suggested.prefix === form.invoice_prefix ? suggested.number : '') : form.invoice_no || '';
+  const shownNumber = splitInvoiceNo(shownNo).number;
   const error = (key) => errs[key] && <span id={`invoice-${key}-error`} role="alert" className="mt-1 block text-xs font-normal text-danger-ink">{errs[key]}</span>;
   const star = (key) => required.has(key) ? <span className="ml-0.5 text-danger" aria-hidden="true">*</span> : <span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span>;
   const setCustom = (id, value) => setForm({ ...form, custom_fields: { ...(form.custom_fields || {}), [id]: value } });
@@ -117,19 +132,25 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
         <Group id="invoice-details-heading" title="Invoice details" description="Identify the transaction.">
           {field('date_issued', 'Date Issued', 'date')}
           <div className="label">
-            <label htmlFor="invoice_number" className="mb-1.5 block">Invoice No.{star('invoice_number')}</label>
+            <label htmlFor="invoice_number" className="mb-1.5 block">Invoice No.<span className="ml-1.5 text-xs font-normal text-fg-subtle">Assigned automatically</span></label>
             <span className="flex">
-              <select aria-label="Invoice number prefix" className="input !w-auto rounded-r-none border-r-0 bg-surface-2 font-medium" value={form.invoice_prefix} onChange={setInvoicePart('invoice_prefix')}>
+              <select aria-label="Invoice type" disabled={!isNew} className="input !w-auto rounded-r-none border-r-0 bg-surface-2 font-medium" value={form.invoice_prefix} onChange={set('invoice_prefix')}>
                 {PREFIXES.map((p) => <option key={p} value={p}>{p}</option>)}
                 {!PREFIXES.includes(form.invoice_prefix) && <option value={form.invoice_prefix}>{form.invoice_prefix || 'None'} (current)</option>}
               </select>
-              <input id="invoice_number" type="text" required aria-invalid={Boolean(errs.invoice_no)} aria-describedby={errs.invoice_no ? 'invoice-invoice_no-error' : undefined} className={`${cls('invoice_no')} num rounded-l-none`} value={form.invoice_number} onChange={setInvoicePart('invoice_number')} />
+              <input id="invoice_number" type="text" readOnly tabIndex={-1} aria-readonly="true" aria-invalid={Boolean(errs.invoice_no || errs.invoice_prefix)} aria-describedby="invoice-number-note" className={`${cls('invoice_no')} num rounded-l-none bg-surface-2 text-fg-muted`} value={shownNumber} placeholder={isNew && !suggested.failed ? 'Loading…' : ''} />
             </span>
-            {error('invoice_no')}
-            {!errs.invoice_no && form.invoice_number?.trim() && <span className="mt-1 block text-xs font-normal text-fg-muted" role="status">{invoiceNo.value ? <>Saved as <span className="num font-medium text-fg">{invoiceNo.value}</span></> : <span className="text-warning-ink">{invoiceNo.error}</span>}</span>}
+            {error('invoice_no')}{error('invoice_prefix')}
+            <span id="invoice-number-note" className="mt-1 block text-xs font-normal text-fg-muted" role="status">
+              {isNew ? (suggested.failed ? <span className="text-warning-ink">Could not load the next number; one is still assigned when you save.</span> : 'Next number for this type. The final number is confirmed when the invoice is saved.') : 'An invoice keeps its number.'}
+            </span>
           </div>
           {field('cr_no', 'CR No.')}
           {field('due_date', 'Due Date', 'date')}
+          <label className="label" htmlFor="invoice-terms">
+            <span className="mb-1.5 block">Terms<span className="ml-1.5 text-xs font-normal text-fg-subtle">Fixed</span></span>
+            <input id="invoice-terms" type="text" readOnly tabIndex={-1} aria-readonly="true" className="input bg-surface-2 text-fg-muted" value={TERMS} />
+          </label>
         </Group>
         <Group id="invoice-client-heading" title="Client & delivery" description="Who it is for and what was delivered.">
           <div className="label">
@@ -206,7 +227,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
           <textarea id="invoice-remarks" rows="3" className="input resize-y" value={form.remarks} onChange={set('remarks')} placeholder="Add delivery notes or payment details" />
         </label>
       </form>
-      {preview && <InvoicePreview invoice={{ ...form, invoice_no: invoiceNo.value || '' }} onClose={() => setPreview(false)} />}
+      {preview && <InvoicePreview invoice={{ ...form, invoice_no: shownNo, terms: TERMS }} onClose={() => setPreview(false)} />}
     </Modal>
   );
 }

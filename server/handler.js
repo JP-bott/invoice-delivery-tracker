@@ -8,6 +8,7 @@ import * as cf from './services/customFieldService.js';
 import { handlers, dashboard } from './services/dashboardService.js';
 import * as dashboardFilters from './services/dashboardFilterService.js';
 import { errorResponse, invalid, notFound } from './http.js';
+import { isInvoicePrefix } from '../shared/invoiceNumber.js';
 
 const ok = (body, status = 200) => ({ status, body });
 const idOf = (s) => (/^\d+$/.test(s) ? Number(s) : null);
@@ -83,6 +84,11 @@ async function route(method, seg, query, body) {
         return Object.keys(errors).length ? invalid(errors) : ok(await inv.create(value, writes), 201);
       };
       return null;
+    }
+    // Read-only suggestion for the Add Invoice form. Assigns nothing: only saving an invoice consumes a number.
+    if (a === 'next-number') {
+      if (method !== 'GET') return null;
+      return async () => isInvoicePrefix(query.prefix) ? ok(await inv.nextNumber(query.prefix.trim().toUpperCase())) : invalid({ prefix: 'Choose SI or SVI' });
     }
     const id = idOf(a);
     if (method === 'GET') return async () => { const r = id == null ? null : await inv.get(id); return r ? ok(r) : notFound(); };

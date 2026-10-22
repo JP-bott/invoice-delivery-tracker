@@ -1,36 +1,30 @@
-// SVI/SI invoice number format, shared by the form (live hint) and the API (authoritative).
-// Canonical form: "SVI - 001", "SVI - 2026-001", "SI - 001". Pure JS, no imports.
+// SI / SVI invoice numbers. The server is the only place a number is assigned (invoice_sequences, see invoiceService.js);
+// this file holds the pure helpers shared by the API and the UI. Pure JS, no imports.
+// Stored form: "SI - 0006", "SVI - 0013" (zero-padded to at least 4 digits, growing past 9999). Preview/print shows "No. 0006".
 export const INVOICE_PREFIXES = ['SVI', 'SI'];
-const LEAD = /^(SVI|SI)(?![A-Za-z])\s*[-–—]?\s*/i; // a prefix token; "SIGMA-1" is not one
-const REST = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
-export const MAX_INVOICE_REST = 40;
+export const MIN_DIGITS = 4;
+export const isInvoicePrefix = (p) => typeof p === 'string' && INVOICE_PREFIXES.includes(p.trim().toUpperCase());
 
-// normalizeInvoiceNo(typed, selectedPrefix?) -> { value } | { error }
-//  - strips repeated leading prefixes ("SI - SI - 001" -> "SI - 001"), trims and collapses whitespace
-//  - applies selectedPrefix (or the typed prefix) and joins as `${prefix} - ${number}`
-export function normalizeInvoiceNo(typed, selected) {
-  if (typeof typed !== 'string') return { error: 'Required' };
-  const chosen = typeof selected === 'string' && selected.trim() ? selected.trim().toUpperCase() : '';
-  if (chosen && !INVOICE_PREFIXES.includes(chosen)) return { error: 'Prefix must be SVI or SI' };
-  let s = typed.trim().replace(/\s+/g, ' '), typedPrefix = '', m;
-  while ((m = LEAD.exec(s))) {
-    const p = m[1].toUpperCase();
-    if (typedPrefix && p !== typedPrefix) return { error: 'Use only one prefix (SVI or SI)' };
-    typedPrefix = p; s = s.slice(m[0].length);
-  }
-  const rest = s.replace(/\s*-\s*/g, '-').replace(/^[-–—\s]+|[-–—\s]+$/g, '');
-  if (!rest) return { error: typedPrefix || chosen ? 'Enter the invoice number after the prefix' : 'Required' };
-  if (rest.length > MAX_INVOICE_REST) return { error: `Number must be ${MAX_INVOICE_REST} characters or fewer` };
-  if (!REST.test(rest)) return { error: 'Use letters, numbers and - . / _ only' };
-  if (chosen && typedPrefix && chosen !== typedPrefix) return { error: `Starts with ${typedPrefix} but ${chosen} is selected` };
-  const prefix = chosen || typedPrefix;
-  if (!prefix) return { error: 'Start with SVI or SI, or choose a prefix' };
-  return { value: `${prefix} - ${rest}` };
-}
+// "SI" + 6 -> "SI - 0006".
+export const formatInvoiceNo = (prefix, n) => `${String(prefix).trim().toUpperCase()} - ${String(n).padStart(MIN_DIGITS, '0')}`;
 
-// Splits a stored number into the form's prefix + number parts. Legacy values ("SVI001", "VI123") still split.
+// Splits a stored number into prefix + number text. Older formats ("SVI001", "SVI- 0726", "VI123") still split.
 export function splitInvoiceNo(invoiceNo = '') {
   const s = String(invoiceNo);
   const m = s.match(/^(SVI|SI|VI)(?![A-Za-z])\s*-?\s*(.*)$/i);
   return m ? { prefix: m[1].toUpperCase(), number: m[2] } : { prefix: '', number: s };
+}
+
+// The integer a stored SI/SVI number carries, or null when it is not a plain SI/SVI + digits number (e.g. "OLD-1", "SI - 2026-001").
+export function sequenceOf(invoiceNo, prefix) {
+  const { prefix: p, number } = splitInvoiceNo(invoiceNo);
+  if (p !== String(prefix).toUpperCase() || !/^\d+$/.test(number)) return null;
+  const n = Number(number);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+// What the invoice sheet shows in its number box: "No. 0006" (the type stays in the stored value only).
+export function sheetInvoiceNo(invoiceNo) {
+  const { number } = splitInvoiceNo(invoiceNo);
+  return number ? `No. ${number}` : '';
 }
