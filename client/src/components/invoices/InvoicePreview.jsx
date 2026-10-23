@@ -3,7 +3,7 @@ import { Printer } from 'lucide-react';
 import Modal from '../Modal.jsx';
 import { computeTotals } from '../../../../shared/pricing.js';
 import { money, sheetPricing } from '../../utils/sheetPricing.js';
-import { sheetInvoiceNo } from '../../utils/invoiceNo.js';
+import { sheetInvoiceNo, sheetInvoiceType } from '../../utils/invoiceNo.js';
 import './invoice-sheet.css';
 
 const ROWS = 14; // fits one A5 page once the sheet is rendered with real text
@@ -18,10 +18,11 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
   const t = computeTotals(total, type, whtRate);
   const vatable = type === 'vatable';
   const invoiceNo = invoice.invoice_no || ''; // stored value ("SI - 0006"); the sheet shows only "No. 0006"
+  const invoiceType = sheetInvoiceType(invoiceNo, invoice.invoice_prefix);
   if (invoice.remarks) rows.push({ q: '', d: invoice.remarks, u: '', a: '', sub: true });
   while (rows.length < ROWS) rows.push({ q: '', d: '', u: '', a: '' });
   return (
-    <div className="inv-sheet" role="document" aria-label={`Service invoice ${invoiceNo}`}>
+    <div className="inv-sheet" role="document" aria-label={`${invoiceType === 'SALES' ? 'Sales' : 'Service'} invoice ${invoiceNo}`}>
       <header>
         <h1>QUANDATICS INC.</h1>
         <p>8th Floor Unit-O Cyber One Building 11 Eastwood Avenue, Eastwood City Cyberpark</p>
@@ -29,7 +30,7 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
         <p>VAT Reg. No. 010-241-281-00000</p>
       </header>
       <div className="title-row">
-        <div className="t">SERVICE <b>INVOICE</b></div>
+        <div className="t">{invoiceType} <b>INVOICE</b></div>
         <div className="no"><span>{sheetInvoiceNo(invoiceNo)}</span></div>
       </div>
       <table className="info"><tbody>

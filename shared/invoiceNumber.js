@@ -23,6 +23,13 @@ export function sequenceOf(invoiceNo, prefix) {
   return Number.isSafeInteger(n) ? n : null;
 }
 
+// Use the stored invoice number for saved invoices; use the selected type while an unsaved invoice is previewed.
+export function sheetInvoiceType(invoiceNo, invoicePrefix = '') {
+  const storedPrefix = splitInvoiceNo(invoiceNo).prefix;
+  const prefix = ['SI', 'SVI'].includes(storedPrefix) ? storedPrefix : String(invoicePrefix).trim().toUpperCase();
+  return prefix === 'SI' ? 'SALES' : 'SERVICE';
+}
+
 // What the invoice sheet shows in its number box: "No. 0006" (the type stays in the stored value only).
 export function sheetInvoiceNo(invoiceNo) {
   const { number } = splitInvoiceNo(invoiceNo);
