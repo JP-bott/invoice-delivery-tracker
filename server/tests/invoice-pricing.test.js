@@ -6,7 +6,7 @@ import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICI
 import { initSchema } from '../database/db.js';
 import { validateInvoice } from '../services/validate.js';
 import { parseUnitCost, parseQtyMilli, lineAmountCentavos, priceItems, computeTotals } from '../../shared/pricing.js';
-import { splitInvoiceNo, sequenceOf, formatInvoiceNo, sheetInvoiceNo } from '../../shared/invoiceNumber.js';
+import { splitInvoiceNo, sequenceOf, formatInvoiceNo, sheetInvoiceNo, sheetInvoiceType } from '../../shared/invoiceNumber.js';
 import { sheetPricing } from '../../client/src/utils/sheetPricing.js';
 import { sanitizeDecimal, deriveUnitCost } from '../../client/src/utils/items.js';
 
@@ -61,6 +61,17 @@ describe('existing VAT / withholding arithmetic is unchanged', () => {
     expect(computeTotals(100000, 'exempt', 0)).toMatchObject({ net: 100000, vat: 0, sE: 100000, grand: 100000 });
     expect(computeTotals(100000, 'zero', 0.01)).toMatchObject({ vat: 0, sZ: 100000, wht: 1000, grand: 99000 });
     expect(computeTotals(0, 'vatable', 0).has).toBe(false);
+  });
+});
+
+describe('invoice sheet heading', () => {
+  it('shows Sales Invoice for SI and Service Invoice for SVI, including unsaved previews', () => {
+    expect(sheetInvoiceType('SI - 0001')).toBe('SALES');
+    expect(sheetInvoiceType('SVI - 0001')).toBe('SERVICE');
+    expect(sheetInvoiceType('', 'SI')).toBe('SALES');
+    expect(sheetInvoiceType('', 'SVI')).toBe('SERVICE');
+    expect(sheetInvoiceType('SI - 0001', 'SVI')).toBe('SALES');
+    expect(sheetInvoiceType('VI00123')).toBe('SERVICE');
   });
 });
 
