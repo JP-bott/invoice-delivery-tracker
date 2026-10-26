@@ -38,7 +38,7 @@ export async function list(q) {
 const EXPORT_LIMIT = 100;
 const exportInteger = (raw, name) => {
   if (raw === undefined || raw === null || raw === '') return null;
-  if (!/^\\d+$/.test(String(raw)) || !Number.isSafeInteger(Number(raw))) {
+  if (!/^\d+$/.test(String(raw)) || !Number.isSafeInteger(Number(raw))) {
     throw new HttpError(400, `Invalid ${name}`);
   }
   return Number(raw);
