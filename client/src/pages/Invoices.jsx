@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Download, LoaderCircle } from 'lucide-react';
+import { buildInvoiceWorkbook } from '../utils/invoiceWorkbook.js';
 import { api, qs } from '../utils/api.js';
 import FilterBar from '../components/invoices/FilterBar.jsx';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
@@ -41,6 +43,7 @@ export default function Invoices() {
   const onFieldsError = useCallback((e) => toast.error(`Could not load custom fields: ${e.message}`), [toast]);
   const { fields, reload: reloadFields } = useInvoiceFields(onFieldsError);
   const [saving, setSaving] = useState(false), [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Registered clients feed the Client autocomplete; refreshed whenever the form opens so Settings changes show up.
   const loadClients = useCallback(() => api('/api/clients').then(setClients).catch((e) => toast.error(`Could not load clients: ${e.message}`)), [toast]);
@@ -60,6 +63,41 @@ export default function Invoices() {
   }, [dq, sort, page, pageSize, toast]);
   useEffect(() => { load(); }, [load]);
 
+  const exportInvoices = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      let afterId = 0, maxId = null, expected = null;
+      const rows = [], seen = new Set();
+      let allFields = [];
+      for (let pageIndex = 0; ; pageIndex++) {
+        if (pageIndex >= 10000) throw new Error('Export exceeds the supported batch limit.');
+        const response = await api(`/api/invoices/export-data?${qs({ afterId, maxId })}`);
+        if (maxId === null) { maxId = response.max_id; expected = response.total; allFields = response.fields; }
+        if (response.max_id !== maxId || response.total !== expected) throw new Error('Invoice data changed. Please try again.');
+        if (!response.data.length && response.has_more) throw new Error('Incomplete export page.');
+        for (const invoice of response.data) {
+          if (seen.has(invoice.id) || invoice.id <= afterId || invoice.id > maxId) throw new Error('Duplicate or out-of-order data.');
+          seen.add(invoice.id); rows.push(invoice);
+        }
+        afterId = response.next_after_id;
+        if (!response.has_more) break;
+      }
+      if (rows.length !== expected) throw new Error('Record count changed during export. Please retry.');
+      const workbook = buildInvoiceWorkbook(rows, allFields);
+      const fileName = `Invoice_Records_${new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Manila'})}.xlsx`;
+      const objectUrl = URL.createObjectURL(workbook);
+      try {
+        const link = document.createElement('a');
+        link.href = objectUrl; link.download = fileName;
+        document.body.appendChild(link); link.click(); link.remove();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      }
+      toast.success(`Exported ${rows.length} invoice record${rows.length === 1 ? '' : 's'} to Excel`);
+    } catch (error) { toast.error(`Could not export invoices: ${error.message}`); }
+    finally { setExporting(false); }
+  };
   const save = async () => {
     if (saving) return;
     setSaving(true);
@@ -87,7 +125,7 @@ export default function Invoices() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Invoices" description={loading && !res.total ? 'Loading invoices…' : `${res.total} invoice${res.total === 1 ? '' : 's'}${filtered ? ' match your filters' : ' in total'}`} />
+      <PageHeader title="Invoices" description={loading && !res.total ? 'Loading invoices…' : `${res.total} invoice${res.total === 1 ? '' : 's'}${filtered ? ' match your filters' : ' in total'}`} actions={<button type="button" className="btn btn-secondary" onClick={exportInvoices} disabled={exporting} title="Export all invoices regardless of current filters and pagination">{exporting ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <Download size={16} aria-hidden="true" />}{exporting ? 'Preparing Excel…' : 'Export all to Excel'}</button>} />
       <FilterBar f={f} setF={setF} products={products} fields={fields} onClear={clearFilters} sort={sort}
         onSortField={(k) => setSort({ ...sort, sortBy: k })} onSortDir={() => setSort({ ...sort, sortDir: sort.sortDir === 'asc' ? 'desc' : 'asc' })} />
       <InvoiceTable fields={fields} rows={res.data} loading={loading} sort={sort} onSort={onSort} onEdit={openEdit} onDelete={setDel} onPreview={(r) => setPreview({ ...r, amount: formatAmount(r.amount) })} onTimeline={setTimelineInvoice} filtered={filtered} onClear={clearFilters} onAdd={openAdd} />
