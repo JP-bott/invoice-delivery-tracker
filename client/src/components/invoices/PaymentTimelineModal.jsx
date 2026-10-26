@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Check, Circle, Clock3, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { Check, Circle, Clock3, Pencil, Save, Trash2, X } from 'lucide-react';
 import { api, peso } from '../../utils/api.js';
 import Modal from '../Modal.jsx';
 import { useToast } from '../Toast.jsx';
+import PaymentJourney from './PaymentJourney.jsx';
 
 const tone = {
   neutral: 'border-line bg-surface-2 text-fg-muted',
@@ -51,25 +52,21 @@ export default function PaymentTimelineModal({ invoice, onClose }) {
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
-  const latest = data.events.at(-1), canEdit = data.can_edit && eligible(invoice);
+  const canEdit = data.can_edit && eligible(invoice);
+  const selectStage = (id) => {
+    setEditor(null); setChosen(id); setNote('');
+    requestAnimationFrame(() => document.getElementById('payment-timeline-note')?.focus());
+  };
   const selection = [...data.stages];
   if (editor && !selection.some((stage) => stage.id === editor.stage_id)) {
     selection.push({ id: editor.stage_id, label: editor.stage_label, tone: editor.stage_tone, description: 'Archived stage (historical entry)' });
   }
   return (
     <Modal title="Payment tracking timeline" description={`${invoice.invoice_no} · ${invoice.client_name}`}
-      width="max-w-2xl" onClose={onClose} footer={<button className="btn btn-secondary" onClick={onClose}>Close</button>}>
-      <div className="rounded-xl border border-line bg-surface-2/60 p-4">
-        <p className="eyebrow">Current collection stage</p>
-        <div className="mt-2 flex items-start justify-between gap-3">
-          <div><p className="text-lg font-semibold text-fg">{latest?.stage_label || (invoice.payment_status === 'Paid' ? 'Payment received' : 'Awaiting tracking update')}</p>
-            <p className="mt-1 text-xs text-fg-muted">{latest ? dateLabel(latest.created_at) : 'No tracking updates yet'}</p></div>
-          <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium ${tone[latest?.stage_tone] || tone.neutral}`}>{invoice.payment_status}</span>
-        </div>
-        {latest?.note && <p className="mt-3 whitespace-pre-wrap text-sm text-fg-muted">{latest.note}</p>}
-        <div className="mt-3 border-t border-line pt-3 text-sm text-fg-muted">Outstanding <strong className="num ml-1 text-fg">{peso(invoice.outstanding)}</strong></div>
-      </div>
+      width="max-w-4xl" onClose={onClose} footer={<button className="btn btn-secondary" onClick={onClose}>Close</button>}>
       {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
+      {loading ? <div className="rounded-xl border border-line bg-surface-2/60 p-6 text-sm text-fg-muted">Loading the complete payment journey…</div>
+        : <PaymentJourney invoice={invoice} stages={data.stages} events={data.events} canEdit={canEdit} onChooseStage={selectStage} />}
       <section aria-label="Chronological payment progress">
         <div className="mb-4 flex items-center justify-between gap-2">
           <h3 className="section-title">Activity timeline</h3>
@@ -100,7 +97,7 @@ export default function PaymentTimelineModal({ invoice, onClose }) {
       {canEdit && <form className="rounded-xl border border-line p-4" onSubmit={save}>
         <div className="mb-3 flex items-center justify-between gap-2"><h3 className="section-title">{editor ? 'Edit tracking update' : 'Add tracking update'}</h3>
           {editor && <button type="button" className="btn btn-ghost !h-8" onClick={reset}><X size={14}/>Cancel edit</button>}</div>
-        <p className="mb-3 text-xs text-fg-muted">Select a stage from the visual progression. Stages are managed under Settings.</p>
+        <p className="mb-3 text-xs text-fg-muted">Choose a milestone below or select “Record an update here” from the journey chart. Stage options are managed under Settings.</p>
         <div role="group" aria-label="Select payment progress stage" className="grid gap-2 sm:grid-cols-2">
           {selection.map((stage) => <button key={stage.id} type="button" onClick={() => setChosen(stage.id)}
             aria-pressed={chosen === stage.id} className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${chosen === stage.id ? 'border-brand bg-brand-soft/40 ring-1 ring-brand' : 'border-line hover:bg-surface-2'}`}>
