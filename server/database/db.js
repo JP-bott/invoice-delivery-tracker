@@ -1,6 +1,7 @@
 import { createClient } from '@libsql/client';
-import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS, CLIENT_STATEMENTS, INVOICE_CLIENT_COLUMNS, SEQUENCE_STATEMENTS, SEQUENCE_PREFIXES, INVOICE_TERMS_COLUMN } from './schema.js';
+import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS, CLIENT_STATEMENTS, INVOICE_CLIENT_COLUMNS, SEQUENCE_STATEMENTS, SEQUENCE_PREFIXES, INVOICE_TERMS_COLUMN, PAYMENT_TIMELINE_STATEMENTS } from './schema.js';
 import { sequenceOf } from '../../shared/invoiceNumber.js';
+import { seedStages } from '../services/paymentTimelineService.js';
 
 const AUTO_DUE_DATE_MIGRATION = 'due_date_from_delivery_v1';
 
@@ -24,7 +25,7 @@ export function getDb() {
 
 // Idempotent (CREATE ... IF NOT EXISTS), one round trip. Never drops or alters existing data.
 export async function initSchema(c = getDb()) {
-  await c.batch([...SCHEMA_STATEMENTS, ...CUSTOM_FIELD_STATEMENTS, ...ITEM_STATEMENTS, ...CLIENT_STATEMENTS, ...SEQUENCE_STATEMENTS], 'write');
+  await c.batch([...SCHEMA_STATEMENTS, ...CUSTOM_FIELD_STATEMENTS, ...ITEM_STATEMENTS, ...CLIENT_STATEMENTS, ...SEQUENCE_STATEMENTS, ...PAYMENT_TIMELINE_STATEMENTS], 'write');
   const columns = await c.execute('PRAGMA table_info(invoices)');
   if (!columns.rows.some((column) => column.name === 'due_date')) await c.execute('ALTER TABLE invoices ADD COLUMN due_date TEXT');
   for (const name of INVOICE_CLIENT_COLUMNS) if (!columns.rows.some((column) => column.name === name)) await c.execute(`ALTER TABLE invoices ADD COLUMN ${name} TEXT`);
@@ -48,6 +49,7 @@ export async function initSchema(c = getDb()) {
       { sql: 'INSERT INTO schema_meta (key, value) VALUES (?, ?)', args: ['product_options_seeded', '1'] },
     ], 'write');
   }
+  await seedStages(c);
 }
 
 // Highest number ever stored for a type (null when it has none). Numbers that are not plain SI/SVI + digits are ignored.
