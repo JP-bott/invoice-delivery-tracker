@@ -1,4 +1,4 @@
-import { CalendarClock, Check, Circle, Clock3, Flag, MapPin, Route } from 'lucide-react';
+import { ArrowUpRight, CalendarClock, Check, Circle, Clock3, Flag, MapPin, Route } from 'lucide-react';
 import { peso } from '../../utils/api.js';
 import { today } from '../../utils/dates.js';
 import { buildPaymentJourney } from '../../utils/paymentJourney.js';
@@ -15,7 +15,7 @@ const labels = {
   unrecorded: 'Not recorded',
 };
 
-function JourneyStage({ step, next }) {
+function JourneyStage({ step, next, canEdit, onChoose }) {
   const isCurrent = step.state === 'current';
   const passed = step.state === 'passed';
   const reachedNext = next && next.visitCount > 0;
@@ -45,6 +45,8 @@ function JourneyStage({ step, next }) {
         </p>}
         {step.lastVisit?.note && <p className={`pj-stage-note ${isCurrent ? 'pj-stage-note-current' : ''}`}>{step.lastVisit.note}</p>}
         {isCurrent && <div className="pj-current-indicator"><MapPin size={13} aria-hidden="true"/> YOU ARE HERE</div>}
+        {canEdit && !step.archived && <button type="button" className="pj-stage-select" onClick={() => onChoose(step.id)}
+          aria-label={`Record a payment update at ${step.label}`}>Record an update here <ArrowUpRight size={13} aria-hidden="true"/></button>}
       </div>
     </li>
   );
@@ -52,7 +54,7 @@ function JourneyStage({ step, next }) {
 
 // The route always shows ALL configured stages. Only actual events establish that a stage was visited.
 // An out-of-order event does not imply that earlier milestones were completed.
-export default function PaymentJourney({ invoice, stages, events }) {
+export default function PaymentJourney({ invoice, stages, events, canEdit = false, onChooseStage }) {
   const journey = buildPaymentJourney(stages, events);
   const currentLabel = journey.latest?.stage_label || 'Not started';
   const overdue = invoice.due_date && invoice.due_date < today() && Number(invoice.outstanding) > 0;
@@ -99,7 +101,7 @@ export default function PaymentJourney({ invoice, stages, events }) {
       </div>
 
       {journey.steps.length ? <ol className="pj-route-list">
-        {journey.steps.map((step, index) => <JourneyStage key={step.key} step={step} next={journey.steps[index + 1]} />)}
+        {journey.steps.map((step, index) => <JourneyStage key={step.key} step={step} next={journey.steps[index + 1]} canEdit={canEdit} onChoose={onChooseStage} />)}
       </ol> : <div className="pj-empty">
         <Circle size={21} aria-hidden="true" />
         No payment stages configured yet. Add stages in Settings to build a tracking journey.
