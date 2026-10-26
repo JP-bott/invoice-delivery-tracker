@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Eye, FileSearch, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Eye, FileSearch, Pencil, Route, Trash2 } from 'lucide-react';
 import { peso } from '../../utils/api.js';
 import { today } from '../../utils/dates.js';
 import { displayValue } from '../../utils/customFields.js';
@@ -10,13 +10,14 @@ const COLS = [['date_issued', 'Date Issued'], ['invoice_no', 'Invoice No.'], ['c
 const daysLate = (due, now) => Math.round((Date.parse(now) - Date.parse(due)) / 86400000);
 const isOverdue = (r, now) => r.due_date && r.due_date < now && r.outstanding > 0 && ['Pending', 'Partially Paid'].includes(r.payment_status);
 
-const actions = (r, onEdit, onDelete, onPreview) => [
+const actions = (r, onEdit, onDelete, onPreview, onTimeline) => [
+  ...(['Pending', 'Partially Paid'].includes(r.payment_status) && r.outstanding > 0 ? [{ label: 'Payment timeline', icon: Route, onClick: () => onTimeline(r) }] : []),
   { label: 'Preview invoice', icon: Eye, onClick: () => onPreview(r) },
   { label: 'Edit invoice', icon: Pencil, onClick: () => onEdit(r) },
   { label: 'Delete invoice', icon: Trash2, onClick: () => onDelete(r), danger: true },
 ];
 
-export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDelete, onPreview, filtered, onClear, onAdd, fields = [] }) {
+export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDelete, onPreview, onTimeline, filtered, onClear, onAdd, fields = [] }) {
   const now = today();
   const extra = fields.filter((f) => f.show_in_table); // custom columns sit between Remarks and the actions menu
   const COUNT = COLS.length + extra.length;
@@ -58,12 +59,12 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
                   <td className="td num text-right">{peso(r.amount)}</td>
                   <td className="td num text-right text-fg-muted">{peso(r.amount_paid)}</td>
                   <td className={`td num text-right font-medium ${r.outstanding > 0 ? 'text-fg' : 'text-fg-subtle'}`}>{peso(r.outstanding)}</td>
-                  <td className="td"><StatusBadge status={r.payment_status} /></td>
+                  <td className="td"><div className="flex items-center gap-2"><StatusBadge status={r.payment_status} />{['Pending', 'Partially Paid'].includes(r.payment_status) && r.outstanding > 0 && <button type="button" className="btn btn-ghost !h-7 !px-2 text-xs" onClick={() => onTimeline(r)} title="View payment timeline"><Route size={13}/>Timeline</button>}</div></td>
                   <td className="td num text-fg-muted">{r.delivery_date || '—'}</td>
                   <td className="td"><StatusBadge status={r.deliveryStatus === 'Delivered' ? 'Delivered' : 'Pending'} label={r.deliveryStatus} /></td>
                   <td className="td max-w-[10rem] truncate text-fg-muted" title={r.remarks || undefined}>{r.remarks || '—'}</td>
                   {extra.map((f) => <td key={f.id} className={`td max-w-[12rem] truncate text-fg-muted ${f.input_type === 'number' ? 'num text-right' : ''}`} title={shown(r, f)}>{shown(r, f)}</td>)}
-                  <td className="td text-right"><ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete, onPreview)} /></td>
+                  <td className="td text-right"><ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete, onPreview, onTimeline)} /></td>
                 </tr>))}
           </tbody>
         </table>
@@ -77,9 +78,9 @@ export default function InvoiceTable({ rows, loading, sort, onSort, onEdit, onDe
             <li key={r.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0"><p className="num font-semibold text-fg">{r.invoice_no}</p><p className="truncate text-sm text-fg-muted">{r.client_name}</p></div>
-                <ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete, onPreview)} />
+                <ActionMenu label={`Actions for invoice ${r.invoice_no}`} items={actions(r, onEdit, onDelete, onPreview, onTimeline)} />
               </div>
-              <p className="mt-0.5 truncate text-xs text-fg-subtle">{itemsSummary(r)}</p>
+              <p className="mt-0.5 truncate text-xs text-fg-subtle">{itemsSummary(r)}</p>{['Pending', 'Partially Paid'].includes(r.payment_status) && r.outstanding > 0 && <button type="button" className="btn btn-secondary !mt-2 !h-8 text-xs" onClick={() => onTimeline(r)}><Route size={14}/>Payment timeline</button>}
               <div className="mt-3 flex items-end justify-between gap-3">
                 <div><p className="num text-lg font-semibold text-fg">{peso(r.amount)}</p><p className="num text-xs text-fg-muted">{r.outstanding > 0 ? `${peso(r.outstanding)} outstanding` : 'Fully paid'}</p></div>
                 <div className="flex flex-wrap justify-end gap-1.5"><StatusBadge status={r.payment_status} /><StatusBadge status={r.deliveryStatus === 'Delivered' ? 'Delivered' : 'Pending'} label={r.deliveryStatus} /></div>
