@@ -36,6 +36,9 @@ describe('complete invoice Excel export', () => {
    const r=await invoke('POST','/api/invoices',draft(i));
    expect(r.status).toBe(201);
   }
+  const zero=await invoke('GET','/api/invoices/export-data?afterId=0');
+  expect(zero.status).toBe(200);
+  expect(zero.body.total).toBe(107);
   const a=await invoke('GET','/api/invoices/export-data');
   expect(a.status).toBe(200);
   expect(a.body.data).toHaveLength(100);
@@ -47,5 +50,7 @@ describe('complete invoice Excel export', () => {
   expect(b.body.has_more).toBe(false);
   expect(new Set([...a.body.data,...b.body.data].map(x=>x.id)).size).toBe(107);
   expect((await invoke('GET','/api/invoices/export-data?afterId=invalid')).status).toBe(400);
+  expect((await invoke('GET','/api/invoices/export-data?afterId=-1')).status).toBe(400);
+  expect((await invoke('GET','/api/invoices/export-data?afterId=1.2')).status).toBe(400);
  });
 });
