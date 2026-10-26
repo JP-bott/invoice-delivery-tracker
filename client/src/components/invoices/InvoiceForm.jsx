@@ -5,6 +5,7 @@ import { formatAmount } from '../../utils/money.js';
 import { valueOf } from '../../utils/customFields.js';
 import { MAX_ITEMS, blankItem, sanitizeDecimal } from '../../utils/items.js';
 import { priceItems } from '../../../../shared/pricing.js';
+import { dueDateFromDelivery } from '../../../../shared/dueDate.js';
 import { api } from '../../utils/api.js';
 import { splitInvoiceNo } from '../../utils/invoiceNo.js';
 import Modal from '../Modal.jsx';
@@ -60,6 +61,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   const removeItem = (i) => setItems(items.filter((_, j) => j !== i));
   const priced = priceItems(items);
   const total = priced.lines.reduce((sum, line) => sum + (line.amount ?? 0), 0); // invoice amount = sum of line amounts (VAT-inclusive, as before)
+  const calculatedDueDate = dueDateFromDelivery(form.delivery_date) || '';
   const cls = (key) => `input ${errs[key] ? 'input-error' : ''}`;
   const aria = (key) => ({ 'aria-invalid': Boolean(errs[key]), 'aria-describedby': errs[key] ? `invoice-${key}-error` : undefined });
 
@@ -146,7 +148,6 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             </span>
           </div>
           {field('cr_no', 'CR No.')}
-          {field('due_date', 'Due Date', 'date')}
           <label className="label" htmlFor="invoice-terms">
             <span className="mb-1.5 block">Terms<span className="ml-1.5 text-xs font-normal text-fg-subtle">Fixed</span></span>
             <input id="invoice-terms" type="text" readOnly tabIndex={-1} aria-readonly="true" className="input bg-surface-2 text-fg-muted" value={TERMS} />
@@ -160,6 +161,11 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             {error('client_name')}
           </div>
           {field('delivery_date', 'Delivery Date', 'date')}
+          <label className="label" htmlFor="invoice-due_date">
+            <span className="mb-1.5 block">Due Date<span className="ml-1.5 text-xs font-normal text-fg-subtle">Calculated automatically</span></span>
+            <input id="invoice-due_date" type="text" readOnly tabIndex={-1} aria-readonly="true" className="input bg-surface-2 text-fg-muted" value={calculatedDueDate} placeholder="Awaiting delivery date" />
+            <span className="mt-1 block text-xs font-normal text-fg-muted">30 calendar days after Delivery Date.</span>
+          </label>
           <fieldset className="sm:col-span-2" aria-describedby={errs.product_service ? 'invoice-product_service-error' : undefined}>
             <legend className="label mb-1.5 block">Products/Services<span className="ml-0.5 text-danger" aria-hidden="true">*</span></legend>
             <div className="space-y-2">

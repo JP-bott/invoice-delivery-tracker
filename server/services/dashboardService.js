@@ -3,6 +3,7 @@ import { toPesos } from './money.js';
 import { buildWhere } from './filterBuilder.js';
 import { toApi } from './invoiceService.js';
 import { activeFields } from './customFieldService.js';
+import { today as manilaToday } from '../../client/src/utils/dates.js';
 
 // Active custom fields travel with the query under a symbol, so every handler's filters can include cf_<id> filters
 // without each one loading them (symbol keys survive object spread; they never reach the database).
@@ -27,7 +28,7 @@ const groupClients = (rows) => Object.values(rows.reduce((groups, row) => {
 
 export const handlers = {
   async analytics(q) {
-    const today = q.asOf || new Date().toISOString().slice(0, 10);
+    const today = q.asOf || manilaToday();
     const from = q.dateFrom || monthStart(today), to = q.dateTo || monthEnd(today);
     const filters = { ...q, dateFrom: undefined, dateTo: undefined, asOf: undefined };
     const base = f(filters);
@@ -87,15 +88,16 @@ export const handlers = {
   },
   async 'invoice-status'(q) {
     const { where, args } = f({ ...q, dateFrom: undefined, dateTo: undefined });
-    const today = new Date().toISOString().slice(0, 10);
+    const today = manilaToday();
     const start = q.dateFrom || `${today.slice(0, 7)}-01`;
     const end = q.dateTo || `${today.slice(0, 7)}-31`;
     const totals = { overdue: { value: 0, count: 0 }, dueMonth: { value: 0, count: 0 }, incoming: { value: 0, count: 0 } };
-    const rows = await run(`SELECT date_issued, amount_centavos, amount_paid_centavos FROM invoices ${where} AND payment_status IN ('Pending','Partially Paid')`, args);
+    const rows = await run(`SELECT due_date, amount_centavos, amount_paid_centavos FROM invoices ${where} AND payment_status IN ('Pending','Partially Paid')`, args);
     for (const row of rows) {
       const outstanding = Math.max(Number(row.amount_centavos) - Number(row.amount_paid_centavos), 0);
       if (!outstanding) continue;
-      const bucket = row.date_issued < start ? 'overdue' : row.date_issued <= end ? 'dueMonth' : 'incoming';
+      // Undelivered invoices have no deadline and are never overdue.
+      const bucket = !row.due_date || row.due_date > end ? 'incoming' : row.due_date < start ? 'overdue' : 'dueMonth';
       totals[bucket].value += outstanding;
       totals[bucket].count += 1;
     }
@@ -104,7 +106,7 @@ export const handlers = {
   // One square per invoice plus a 6-month view of how each issue month's invoices stand today.
   // Uses only stored fields: payment_status, amounts, due_date, date_issued. Late = unpaid and past the due date (as the Overdue card).
   async 'invoice-overview'(q) {
-    const today = q.asOf || new Date().toISOString().slice(0, 10);
+    const today = q.asOf || manilaToday();
     const base = f({ ...q, dateFrom: undefined, dateTo: undefined, asOf: undefined });
     const STATE = `CASE WHEN payment_status NOT IN ('Pending','Partially Paid') OR amount_centavos <= amount_paid_centavos THEN 'paid'
       WHEN due_date IS NULL THEN 'noDue' WHEN due_date >= ? THEN 'waiting'

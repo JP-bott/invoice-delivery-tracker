@@ -36,6 +36,7 @@ describe('validation', () => {
     expect(v({ payment_status: 'Cancelled', amount_paid: 10 }).amount_paid).toBeUndefined();
   });
   it('delivery before issue', () => expect(v({ delivery_date: '2026-09-01' }).delivery_date).toBeTruthy());
+  it('rejects impossible dates', () => expect(v({ delivery_date: '2026-02-30' }).delivery_date).toBeTruthy());
 });
 describe('invoices API', () => {
   it('CRUD; client-supplied numbers and terms are ignored', async () => {
@@ -62,20 +63,23 @@ describe('invoices API', () => {
     const s = (await GET('/api/dashboard/summary')).body;
     expect(s.totalInvoices).toBe(1); expect(s.pendingPayments).toBe(1250.75);
   });
-  it('dashboard invoice status groups unpaid invoices by issue date', async () => {
-    const overdue = await POST('/api/invoices', { ...base, date_issued: '2026-09-30', amount: 200, amount_paid: 50, payment_status: 'Partially Paid' });
-    const incoming = await POST('/api/invoices', { ...base, date_issued: '2026-11-01', amount: 300 });
+  it('dashboard invoice status groups unpaid invoices by delivery-based due date', async () => {
+    const overdue = await POST('/api/invoices', { ...base, date_issued: '2026-08-01', delivery_date: '2026-08-15', amount: 200, amount_paid: 50, payment_status: 'Partially Paid' });
+    const incoming = await POST('/api/invoices', { ...base, date_issued: '2026-11-01', delivery_date: '2026-11-01', amount: 300 });
+    const dueMonth = await POST('/api/invoices', { ...base, date_issued: '2026-09-01', delivery_date: '2026-09-15', amount: 300 });
     const status = (await GET('/api/dashboard/invoice-status?dateFrom=2026-10-01&dateTo=2026-10-31')).body;
     expect(status.buckets.overdue).toEqual({ value: 15000, count: 1 });
-    expect(status.buckets.dueMonth).toEqual({ value: 125075, count: 1 });
-    expect(status.buckets.incoming).toEqual({ value: 30000, count: 1 });
+    expect(status.buckets.dueMonth).toEqual({ value: 30000, count: 1 });
+    expect(status.buckets.incoming).toEqual({ value: 155075, count: 2 });
     await DEL(`/api/invoices/${overdue.body.id}`);
     await DEL(`/api/invoices/${incoming.body.id}`);
+    await DEL(`/api/invoices/${dueMonth.body.id}`);
   });
   it('persists due dates and classifies receivables without overlap', async () => {
-    const overdue = await POST('/api/invoices', { ...base, date_issued: '2026-09-01', due_date: '2026-10-15', amount: 200 });
-    const later = await POST('/api/invoices', { ...base, date_issued: '2026-10-01', due_date: '2026-11-20', amount: 300, client_name: 'B' });
+    const overdue = await POST('/api/invoices', { ...base, date_issued: '2026-09-01', delivery_date: '2026-09-15', due_date: '2099-12-31', amount: 200 });
+    const later = await POST('/api/invoices', { ...base, date_issued: '2026-10-01', delivery_date: '2026-10-21', due_date: '2026-01-01', amount: 300, client_name: 'B' });
     expect(overdue.body.due_date).toBe('2026-10-15');
+    expect(later.body.due_date).toBe('2026-11-20');
     const analytics = (await GET('/api/dashboard/analytics?asOf=2026-10-16&dateFrom=2026-10-01&dateTo=2026-10-31')).body;
     const records = analytics.receivables.categories.flatMap((category) => category.records);
     expect(records.map((record) => record.invoice_no)).toContain(overdue.body.invoice_no);

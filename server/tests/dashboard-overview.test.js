@@ -7,21 +7,21 @@ beforeAll(async () => {
   ({ handle } = await import('../handler.js'));
   const base = { invoice_prefix: 'SVI', product_service: 'P', amount: 100, payment_status: 'Pending', amount_paid: 0, client_name: 'Alpha' };
   const rows = [
-    { date_issued: '2026-10-01', due_date: '2026-10-10', payment_status: 'Paid', amount_paid: 100 }, // paid
-    { date_issued: '2026-10-02', due_date: '2026-11-01' }, // waiting
-    { date_issued: '2026-10-03' }, // no due date
-    { date_issued: '2026-10-04', due_date: '2026-10-11', payment_status: 'Partially Paid', amount_paid: 50, client_name: 'Gamma' }, // late 10 days
-    { date_issued: '2026-08-01', due_date: '2026-09-10' }, // late 41 days
-    { date_issued: '2026-06-01', due_date: '2026-07-01' }, // late 112 days
-    { date_issued: '2026-10-05', due_date: '2026-10-21' }, // due today is not late yet
-    { date_issued: '2026-10-06', due_date: '2026-10-07', payment_status: 'Cancelled' }, // excluded
+    { date_issued: '2026-10-01', delivery_date: '2026-10-02', payment_status: 'Paid', amount_paid: 100 }, // paid
+    { date_issued: '2026-10-02', delivery_date: '2026-12-10' }, // waiting
+    { date_issued: '2026-10-03' }, // no delivery, no due date
+    { date_issued: '2026-10-04', delivery_date: '2026-11-11', payment_status: 'Partially Paid', amount_paid: 50, client_name: 'Gamma' }, // late 10 days
+    { date_issued: '2026-08-01', delivery_date: '2026-10-11' }, // late 41 days
+    { date_issued: '2026-06-01', delivery_date: '2026-08-01' }, // late 112 days
+    { date_issued: '2026-10-05', delivery_date: '2026-11-21' }, // due today, not late
+    { date_issued: '2026-10-06', delivery_date: '2026-11-01', payment_status: 'Cancelled' }, // excluded
   ];
   for (const r of rows) {
     const res = await handle({ method: 'POST', path: '/api/invoices', query: {}, body: { ...base, ...r } });
     if (res.status !== 201) throw new Error(`seed failed for ${r.date_issued}: ${JSON.stringify(res.body)}`);
   }
 });
-const overview = async (query = {}) => (await handle({ method: 'GET', path: '/api/dashboard/invoice-overview', query: { asOf: '2026-10-21', ...query } })).body;
+const overview = async (query = {}) => (await handle({ method: 'GET', path: '/api/dashboard/invoice-overview', query: { asOf: '2026-12-21', ...query } })).body;
 
 describe('dashboard invoice overview', () => {
   it('sorts every non-cancelled invoice into one of six states', async () => {
