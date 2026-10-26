@@ -117,9 +117,10 @@ export async function update(id, v, writes = []) {
   return r.rowsAffected ? get(id) : null;
 }
 export async function remove(id) {
-  const [, , r] = await getDb().batch([
+  const [, , , r] = await getDb().batch([
     { sql: 'DELETE FROM invoice_custom_values WHERE invoice_id = ?', args: [id] },
     { sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] },
+    { sql: 'DELETE FROM payment_timeline_events WHERE invoice_id = ?', args: [id] },
     { sql: 'DELETE FROM invoices WHERE id = ?', args: [id] },
   ], 'write');
   return r.rowsAffected > 0;
