@@ -138,3 +138,9 @@ Settings page and runtime Turso switching, demo login, CSV export, Top Products 
 - Schema runs in one batched round trip; a failed init is retried on the next request.
 - Hardening: non-numeric ids give 404 (was 500); `sortBy`/dashboard names are checked with `Object.hasOwn`; malformed JSON gives a JSON 400.
 - UI split into components; added labels, `aria` attributes, dialog semantics with Escape-to-close. Layout and behavior are otherwise the same.
+
+## Automatic due dates and overdue status
+
+The due date is now **30 calendar days after the Delivery Date**. The Add/Edit Invoice form displays a read-only calculated due date. The backend ignores manually submitted due dates, recalculates the deadline after a delivery-date edit, and clears it if delivery date is removed. Unpaid invoices become overdue only on the day after the calculated deadline, using Manila local date. Invoices not yet delivered have no deadline and are not overdue.
+
+On first startup after this update, the database automatically and once only recalculates due dates for all existing invoices, overwriting any old manually entered deadlines. Invoice numbers, payment amounts, and other details remain unchanged. The optional `migrations/007_automatic_due_dates.sql` mirrors this backfill. Back up the Turso database before deploying if old manually entered due dates need to be retained for reference.
