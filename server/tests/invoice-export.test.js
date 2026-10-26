@@ -21,6 +21,31 @@ describe('complete invoice Excel export', () => {
   const file=buildInvoiceWorkbook([invoice],[{id:12,label:'PO Number',input_type:'text'}]);
   const bytes=new Uint8Array(await file.arrayBuffer());
   expect([...bytes.slice(0,4)]).toEqual([80,75,3,4]);
+  // Validate the actual ZIP central directory, not just the PK prefix.
+  // The previous implementation produced 44-byte directory headers and unreadable XLSX files.
+  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  const signature=(offset)=>view.getUint32(offset,true);
+  const eocd=bytes.length-22;
+  expect(signature(eocd)).toBe(0x06054b50);
+  const count=view.getUint16(eocd+10,true);
+  const centralSize=view.getUint32(eocd+12,true);
+  let cursor=view.getUint32(eocd+16,true);
+  const start=cursor, filenames=[];
+  for(let i=0;i<count;i++){
+    expect(signature(cursor)).toBe(0x02014b50);
+    const nameLen=view.getUint16(cursor+28,true);
+    const extraLen=view.getUint16(cursor+30,true);
+    const commentLen=view.getUint16(cursor+32,true);
+    const localOffset=view.getUint32(cursor+42,true);
+    expect(signature(localOffset)).toBe(0x04034b50);
+    const filename=new TextDecoder().decode(bytes.slice(cursor+46,cursor+46+nameLen));
+    filenames.push(filename);
+    cursor+=46+nameLen+extraLen+commentLen;
+  }
+  expect(cursor-start).toBe(centralSize);
+  expect(filenames).toContain('[Content_Types].xml');
+  expect(filenames).toContain('xl/workbook.xml');
+  expect(filenames).toContain('xl/worksheets/sheet5.xml');
   const decoded=new TextDecoder().decode(bytes);
   expect(decoded).toContain('Invoice Register');
   expect(decoded).toContain('Payment History');
