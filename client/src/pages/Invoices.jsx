@@ -6,6 +6,7 @@ import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import Pagination from '../components/invoices/Pagination.jsx';
 import InvoiceForm from '../components/invoices/InvoiceForm.jsx';
 import InvoicePreview from '../components/invoices/InvoicePreview.jsx';
+import PaymentTimelineModal from '../components/invoices/PaymentTimelineModal.jsx';
 import DeleteDialog from '../components/invoices/DeleteDialog.jsx';
 import { PageHeader } from '../components/ui.jsx';
 import { useToast } from '../components/Toast.jsx';
@@ -36,6 +37,7 @@ export default function Invoices() {
   const [res, setRes] = useState({ data: [], total: 0 }), [loading, setLoading] = useState(true), [products, setProducts] = useState([]), [clients, setClients] = useState([]);
   const [form, setForm] = useState(null), [errs, setErrs] = useState({}), [del, setDel] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [timelineInvoice, setTimelineInvoice] = useState(null);
   const onFieldsError = useCallback((e) => toast.error(`Could not load custom fields: ${e.message}`), [toast]);
   const { fields, reload: reloadFields } = useInvoiceFields(onFieldsError);
   const [saving, setSaving] = useState(false), [deleting, setDeleting] = useState(false);
@@ -88,10 +90,11 @@ export default function Invoices() {
       <PageHeader title="Invoices" description={loading && !res.total ? 'Loading invoices…' : `${res.total} invoice${res.total === 1 ? '' : 's'}${filtered ? ' match your filters' : ' in total'}`} />
       <FilterBar f={f} setF={setF} products={products} fields={fields} onClear={clearFilters} sort={sort}
         onSortField={(k) => setSort({ ...sort, sortBy: k })} onSortDir={() => setSort({ ...sort, sortDir: sort.sortDir === 'asc' ? 'desc' : 'asc' })} />
-      <InvoiceTable fields={fields} rows={res.data} loading={loading} sort={sort} onSort={onSort} onEdit={openEdit} onDelete={setDel} onPreview={(r) => setPreview({ ...r, amount: formatAmount(r.amount) })} filtered={filtered} onClear={clearFilters} onAdd={openAdd} />
+      <InvoiceTable fields={fields} rows={res.data} loading={loading} sort={sort} onSort={onSort} onEdit={openEdit} onDelete={setDel} onPreview={(r) => setPreview({ ...r, amount: formatAmount(r.amount) })} onTimeline={setTimelineInvoice} filtered={filtered} onClear={clearFilters} onAdd={openAdd} />
       <Pagination total={res.total} page={page} pageSize={pageSize} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} />
       {form && <InvoiceForm form={form} setForm={setForm} errs={errs} products={products} clients={clients} fields={fields} saving={saving} onSave={save} onCancel={() => !saving && setForm(null)} />}
       {preview && <InvoicePreview invoice={preview} onClose={() => setPreview(null)} />}
+      {timelineInvoice && <PaymentTimelineModal invoice={timelineInvoice} onClose={() => setTimelineInvoice(null)} />}
       {del && <DeleteDialog invoice={del} busy={deleting} onConfirm={confirmDelete} onCancel={() => !deleting && setDel(null)} />}
     </div>
   );
