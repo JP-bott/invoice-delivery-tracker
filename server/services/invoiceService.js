@@ -4,7 +4,7 @@ import { formatInvoiceNo } from '../../shared/invoiceNumber.js';
 import { toPesos } from './money.js';
 import { buildWhere } from './filterBuilder.js';
 import { HttpError } from '../http.js';
-import { activeFields, valueStatements, refById } from './customFieldService.js';
+import { activeFields, list as listFields, valueStatements, refById } from './customFieldService.js';
 
 const SORTS = { date_issued: 'date_issued', invoice_no: 'invoice_no', cr_no: 'cr_no', client_name: 'client_name', product_service: 'product_service', due_date: 'due_date', amount: 'amount_centavos', amount_paid: 'amount_paid_centavos', payment_status: 'payment_status', delivery_date: 'delivery_date' };
 
@@ -30,6 +30,62 @@ export async function list(q) {
   const rows = (await db.execute({ sql: `SELECT * FROM invoices ${where} ORDER BY ${col} ${dir}, id DESC LIMIT ? OFFSET ?`, args: [...args, pageSize, (page - 1) * pageSize] })).rows;
   return { data: await withItems(await withCustom(rows.map(toApi), fields)), page, pageSize, total };
 }
+// Unfiltered, keyset-paginated snapshot boundary for Excel export.
+// Includes cancelled invoices, registered custom fields (including archived values),
+// every line item, and payment timeline history. No page-size/visible-table restriction.
+// IDs allocated after the first request are excluded by maxId. If existing rows are
+// deleted mid-export, the client will reject the changing total instead of saving a partial file.
+const EXPORT_LIMIT = 100;
+const exportInteger = (raw, name) => {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (!/^\\d+$/.test(String(raw)) || !Number.isSafeInteger(Number(raw))) {
+    throw new HttpError(400, `Invalid ${name}`);
+  }
+  return Number(raw);
+};
+async function withPaymentHistory(invoiceRows) {
+  if (!invoiceRows.length) return invoiceRows;
+  const ids = invoiceRows.map((x) => x.id);
+  const rows = (await getDb().execute({
+    sql: `SELECT id, invoice_id, stage_id, stage_label, stage_tone, note, created_at, updated_at
+      FROM payment_timeline_events WHERE invoice_id IN (${ids.map(() => '?').join(',')})
+      ORDER BY invoice_id, created_at, id`,
+    args: ids,
+  })).rows;
+  const byId = new Map(invoiceRows.map((invoice) => [invoice.id, { ...invoice, timeline: [] }]));
+  for (const row of rows) {
+    const parent = byId.get(Number(row.invoice_id));
+    if (parent) parent.timeline.push({
+      id: Number(row.id), stage_id: row.stage_id == null ? null : Number(row.stage_id),
+      stage_label: row.stage_label, stage_tone: row.stage_tone, note: row.note ?? '',
+      created_at: row.created_at, updated_at: row.updated_at,
+    });
+  }
+  return [...byId.values()];
+}
+
+export async function exportPage(query = {}) {
+  const afterId = exportInteger(query.afterId, 'afterId') ?? 0;
+  const maxRequested = exportInteger(query.maxId, 'maxId');
+  const db = getDb();
+  const maxId = maxRequested ?? Number((await db.execute('SELECT COALESCE(MAX(id), 0) AS last FROM invoices')).rows[0].last);
+  if (afterId > maxId) throw new HttpError(400, 'Invalid export cursor');
+  const [counter, fields, result] = await Promise.all([
+    db.execute({ sql: 'SELECT COUNT(*) AS n FROM invoices WHERE id <= ?', args: [maxId] }),
+    listFields({ includeArchived: true }),
+    db.execute({ sql: 'SELECT * FROM invoices WHERE id > ? AND id <= ? ORDER BY id ASC LIMIT ?', args: [afterId, maxId, EXPORT_LIMIT + 1] }),
+  ]);
+  const fetched = result.rows;
+  const page = fetched.slice(0, EXPORT_LIMIT);
+  const rows = page.map((raw) => ({ ...toApi(raw), created_at: raw.created_at, updated_at: raw.updated_at }));
+  const enriched = await withPaymentHistory(await withItems(await withCustom(rows, fields)));
+  return {
+    data: enriched, fields, total: Number(counter.rows[0].n),
+    max_id: maxId, next_after_id: page.length ? Number(page.at(-1).id) : afterId,
+    has_more: fetched.length > EXPORT_LIMIT,
+  };
+}
+
 // Adds custom_fields: { [fieldId]: value } (active fields only; empty values are simply absent).
 async function withCustom(apiRows, fields) {
   const out = apiRows.map((r) => ({ ...r, custom_fields: {} }));

@@ -115,6 +115,7 @@ async function route(method, seg, query, body) {
       };
       return null;
     }
+    if (a === 'export-data' && method === 'GET') return () => inv.exportPage(query).then(ok);
     // Read-only suggestion for the Add Invoice form. Assigns nothing: only saving an invoice consumes a number.
     if (a === 'next-number') {
       if (method !== 'GET') return null;
