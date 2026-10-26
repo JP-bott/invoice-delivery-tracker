@@ -2,6 +2,8 @@ import { createClient } from '@libsql/client';
 import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS, CLIENT_STATEMENTS, INVOICE_CLIENT_COLUMNS, SEQUENCE_STATEMENTS, SEQUENCE_PREFIXES, INVOICE_TERMS_COLUMN } from './schema.js';
 import { sequenceOf } from '../../shared/invoiceNumber.js';
 
+const AUTO_DUE_DATE_MIGRATION = 'due_date_from_delivery_v1';
+
 let client;
 let ready;
 
@@ -27,6 +29,13 @@ export async function initSchema(c = getDb()) {
   if (!columns.rows.some((column) => column.name === 'due_date')) await c.execute('ALTER TABLE invoices ADD COLUMN due_date TEXT');
   for (const name of INVOICE_CLIENT_COLUMNS) if (!columns.rows.some((column) => column.name === name)) await c.execute(`ALTER TABLE invoices ADD COLUMN ${name} TEXT`);
   if (!columns.rows.some((column) => column.name === 'terms')) await c.execute(`ALTER TABLE invoices ADD COLUMN ${INVOICE_TERMS_COLUMN}`);
+  // Recalculate previously manual due dates once; the marker and update are atomic.
+  await c.batch([
+    { sql: `UPDATE invoices SET due_date = CASE
+        WHEN delivery_date IS NOT NULL AND delivery_date <> '' THEN date(delivery_date, '+30 days')
+        ELSE NULL END WHERE NOT EXISTS (SELECT 1 FROM schema_meta WHERE key = ?)`, args: [AUTO_DUE_DATE_MIGRATION] },
+    { sql: "INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, '1')", args: [AUTO_DUE_DATE_MIGRATION] },
+  ], 'write');
   await seedSequences(c);
   const itemColumns = new Set((await c.execute('PRAGMA table_info(invoice_items)')).rows.map((column) => column.name));
   for (const name of ITEM_PRICING_COLUMNS) if (!itemColumns.has(name)) await c.execute(`ALTER TABLE invoice_items ADD COLUMN ${name} INTEGER`);

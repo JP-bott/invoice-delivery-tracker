@@ -61,7 +61,7 @@ export default function SummaryCards({ s, receivables, onOpenInvoices }) {
           tip={pending.count ? <><p className="font-semibold">{peso(pending.amount)} still owed · {plural(pending.clients.length, 'client')}</p><ClientLines clients={pending.clients} /></> : <p>No pending payments.</p>} />
         <Kpi label="Overdue" count={overdue.count} caption="Unpaid and past the due date" icon={AlertTriangle} tone={overdue.count ? 'danger' : 'neutral'}
           onClick={() => overdue.count && setModal({ title: 'Overdue invoices', description: `Unpaid invoices past their due date, as of ${asOf}.`, records: overdue.records, range: `As of ${asOf}` })}
-          tip={overdue.count ? <><p className="font-semibold">{peso(overdue.amount)} overdue · {plural(overdue.clients.length, 'client')}</p><ClientLines clients={overdue.clients} /></> : <p>Nothing is overdue. Invoices without a due date are not counted.</p>} />
+          tip={overdue.count ? <><p className="font-semibold">{peso(overdue.amount)} overdue · {plural(overdue.clients.length, 'client')}</p><ClientLines clients={overdue.clients} /></> : <p>Nothing is overdue. Invoices without a delivery date are not counted.</p>} />
         <Kpi label="Delivered" count={s.deliveredOrders} caption="Have a delivery date" icon={Truck} tone="success" onClick={() => onOpenInvoices({ deliveryStatus: 'Delivered' })} action="View delivered" />
         <Kpi label="Pending Deliveries" count={s.pendingDeliveries} caption="No delivery date yet" icon={Clock3} tone="warning" onClick={() => onOpenInvoices({ deliveryStatus: 'Pending' })} action="View pending" />
       </div>
