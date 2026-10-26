@@ -30,18 +30,57 @@ const encoder = new TextEncoder();
 const crcTable = Array.from({length:256},(_,n)=>{for(let j=0;j<8;j++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
 const crc32 = (buf) => {let v=0xffffffff;for(const b of buf)v=crcTable[(v^b)&255]^(v>>>8);return (v^0xffffffff)>>>0;};
 const le16=(v)=>[v&255,(v>>>8)&255],le32=(v)=>[v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];
+// ZIP record sizes are defined by PKZIP APPNOTE. In particular, central-directory
+// headers MUST be 46 bytes before the filename. An earlier implementation wrote 44
+// bytes, corrupting the directory and making Excel/WPS reject the downloaded XLSX.
 function zip(files) {
-  const locals=[],central=[];let offset=0;
-  for(const [filename,content] of files) {
-    const name=encoder.encode(filename), bytes=encoder.encode(content), sum=crc32(bytes);
-    const lh=new Uint8Array([80,75,3,4,20,0,0,8,0,0,0,0,0,0,...le32(sum),...le32(bytes.length),...le32(bytes.length),...le16(name.length),0,0]);
-    locals.push(lh,name,bytes);
-    central.push(new Uint8Array([80,75,1,2,20,0,20,0,0,8,0,0,0,0,0,0,...le32(sum),...le32(bytes.length),...le32(bytes.length),...le16(name.length),0,0,0,0,0,0,0,0,0,0,...le32(offset)]),name);
-    offset+=lh.length+name.length+bytes.length;
+  if (files.length > 0xffff) throw new Error('Too many Excel package entries');
+  const locals = [], central = [];
+  let offset = 0;
+  for (const [filename, content] of files) {
+    const name = encoder.encode(filename);
+    const bytes = encoder.encode(content);
+    const sum = crc32(bytes);
+    if (name.length > 0xffff || bytes.length > 0xffffffff) throw new Error('Excel package entry too large');
+
+    // Local file header: 30 bytes before filename and data.
+    const localHeader = new Uint8Array([
+      80, 75, 3, 4, ...le16(20), ...le16(0x0800), ...le16(0),
+      ...le16(0), ...le16(0), ...le32(sum),
+      ...le32(bytes.length), ...le32(bytes.length),
+      ...le16(name.length), ...le16(0),
+    ]);
+
+    // Central directory header: 46 bytes before filename.
+    // After filename length: extra(2), comment(2), disk(2), int attrs(2),
+    // external attrs(4), local header offset(4).
+    const directoryHeader = new Uint8Array([
+      80, 75, 1, 2, ...le16(20), ...le16(20), ...le16(0x0800),
+      ...le16(0), ...le16(0), ...le16(0), ...le32(sum),
+      ...le32(bytes.length), ...le32(bytes.length), ...le16(name.length),
+      ...le16(0), ...le16(0), ...le16(0), ...le16(0),
+      ...le32(0), ...le32(offset),
+    ]);
+    if (localHeader.length !== 30 || directoryHeader.length !== 46) {
+      throw new Error('Invalid Excel ZIP header');
+    }
+    locals.push(localHeader, name, bytes);
+    central.push(directoryHeader, name);
+    offset += localHeader.length + name.length + bytes.length;
+    if (offset > 0xffffffff) throw new Error('Excel package exceeds ZIP32 size limit');
   }
-  const csize=central.reduce((a,x)=>a+x.length,0);
-  const end=new Uint8Array([80,75,5,6,0,0,0,0,...le16(files.length),...le16(files.length),...le32(csize),...le32(offset),0,0]);
-  return new Blob([...locals,...central,end],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+  const directorySize = central.reduce((sum, chunk) => sum + chunk.length, 0);
+  if (offset + directorySize + 22 > 0xffffffff) throw new Error('Excel package exceeds ZIP32 size limit');
+  // End of central directory: fixed 22-byte record with zero-length comment.
+  const endRecord = new Uint8Array([
+    80, 75, 5, 6, ...le16(0), ...le16(0),
+    ...le16(files.length), ...le16(files.length),
+    ...le32(directorySize), ...le32(offset), ...le16(0),
+  ]);
+  return new Blob([...locals, ...central, endRecord], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
 }
 const styles=`<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="&quot;₱&quot;#,##0.00;[Red](&quot;₱&quot;#,##0.00)"/><numFmt numFmtId="165" formatCode="dd mmm yyyy"/></numFmts><fonts count="3"><font><sz val="10"/><name val="Aptos"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Aptos"/></font><font><b/><color rgb="FF193B5B"/><sz val="10"/><name val="Aptos"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF183153"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF1F8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><bottom style="hair"><color rgb="FFD7E2ED"/></bottom></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="1" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyAlignment="1"><alignment horizontal="right"/></xf><xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1"/></cellXfs></styleSheet>`;
 function makeXlsx(sheets){
