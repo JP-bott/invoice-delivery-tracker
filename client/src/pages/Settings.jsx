@@ -7,6 +7,7 @@ import { EmptyState, PageHeader, Skeleton } from '../components/ui.jsx';
 import ClientsSection from '../components/settings/ClientsSection.jsx';
 import InvoiceFieldsSection from '../components/settings/InvoiceFieldsSection.jsx';
 import DashboardFiltersSection from '../components/settings/DashboardFiltersSection.jsx';
+import PaymentTimelineSettings from '../components/settings/PaymentTimelineSettings.jsx';
 import { ExpandableList } from '../components/settings/Expandable.jsx';
 
 // Visually separate panels so form settings and dashboard settings can't be mixed up.
@@ -79,6 +80,7 @@ export default function Settings() {
         </div>
       </section>
       <InvoiceFieldsSection />
+      <PaymentTimelineSettings />
       </SettingsGroup>
       <SettingsGroup id="group-dashboard" tone="info" icon={LayoutDashboard} eyebrow="Dashboard" title="Dashboard filters" description="Which filters appear above the dashboard charts. These don’t change the Add Invoice form.">
         <DashboardFiltersSection />
