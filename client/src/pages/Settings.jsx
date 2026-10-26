@@ -1,96 +1,116 @@
-import { useEffect, useState } from 'react';
-import { FilePlus2, LayoutDashboard, Package, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
-import { api } from '../utils/api.js';
-import { useToast } from '../components/Toast.jsx';
-import Modal from '../components/Modal.jsx';
-import { EmptyState, PageHeader, Skeleton } from '../components/ui.jsx';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft, ChevronRight, FileSliders, LayoutDashboard,
+  Package, Route, Settings2, Users,
+} from 'lucide-react';
 import ClientsSection from '../components/settings/ClientsSection.jsx';
+import ProductsSection from '../components/settings/ProductsSection.jsx';
 import InvoiceFieldsSection from '../components/settings/InvoiceFieldsSection.jsx';
-import DashboardFiltersSection from '../components/settings/DashboardFiltersSection.jsx';
 import PaymentTimelineSettings from '../components/settings/PaymentTimelineSettings.jsx';
-import { ExpandableList } from '../components/settings/Expandable.jsx';
+import DashboardFiltersSection from '../components/settings/DashboardFiltersSection.jsx';
+import { PageHeader } from '../components/ui.jsx';
 
-// Visually separate panels so form settings and dashboard settings can't be mixed up.
-const TONES = { brand: { chip: 'bg-brand-soft text-brand-ink', bar: 'bg-brand' }, info: { chip: 'bg-info-soft text-info-ink', bar: 'bg-info' } };
-function SettingsGroup({ id, tone, icon: Icon, eyebrow, title, description, children }) {
-  const t = TONES[tone];
-  return (
-    <section aria-labelledby={id} className="relative overflow-hidden rounded-2xl border border-line bg-surface-2/50 p-3 pt-5 sm:p-4 sm:pt-6">
-      <span aria-hidden="true" className={`absolute inset-x-0 top-0 h-1 ${t.bar}`} />
-      <header className="mb-4 flex items-start gap-3 px-1">
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${t.chip}`}><Icon size={20} aria-hidden="true" /></span>
-        <div className="min-w-0"><p className="eyebrow">{eyebrow}</p><h2 id={id} className="text-base font-semibold text-fg">{title}</h2><p className="mt-0.5 text-sm text-fg-muted">{description}</p></div>
-      </header>
-      <div className="space-y-4">{children}</div>
-    </section>
-  );
-}
+// A single focused section at a time. The overview does not mount any data-editing panels
+// or make their API requests until the user opens that section.
+const SECTIONS = [
+  {
+    key: 'clients', title: 'Clients', category: 'Invoice management',
+    description: 'Manage client names, addresses, and TIN details used on invoices.',
+    icon: Users, tone: 'bg-brand-soft text-brand-ink', Component: ClientsSection,
+  },
+  {
+    key: 'products', title: 'Products & Services', category: 'Invoice management',
+    description: 'Maintain the products and services available when creating an invoice.',
+    icon: Package, tone: 'bg-info-soft text-info-ink', Component: ProductsSection,
+  },
+  {
+    key: 'invoice-fields', title: 'Invoice Fields', category: 'Invoice management',
+    description: 'Add and organize custom fields for your invoice forms.',
+    icon: FileSliders, tone: 'bg-success-soft text-success-ink', Component: InvoiceFieldsSection,
+  },
+  {
+    key: 'payment-timeline', title: 'Payment Timeline', category: 'Invoice management',
+    description: 'Create, reorder, and customize your payment tracking stages.',
+    icon: Route, tone: 'bg-warning-soft text-warning-ink', Component: PaymentTimelineSettings,
+  },
+  {
+    key: 'dashboard-filters', title: 'Dashboard Filters', category: 'Dashboard',
+    description: 'Choose which filters appear in your dashboard and their order.',
+    icon: LayoutDashboard, tone: 'bg-brand-soft text-brand-ink', Component: DashboardFiltersSection,
+  },
+];
 
 export default function Settings() {
-  const toast = useToast();
-  const [options, setOptions] = useState([]), [name, setName] = useState(''), [editing, setEditing] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
-  const [confirm, setConfirm] = useState(null), [busy, setBusy] = useState(false);
-  const load = () => { setLoading(true); api('/api/products').then(setOptions).catch((e) => setError(e.message)).finally(() => setLoading(false)); };
-  useEffect(() => { load(); }, []);
-  const save = async (event) => {
-    event.preventDefault();
-    const value = name.trim();
-    if (!value) { setError('Enter a product or service name.'); return; }
-    setBusy(true);
-    try {
-      await api(editing ? `/api/products/${editing.id}` : '/api/products', { method: editing ? 'PUT' : 'POST', body: { name: value } });
-      setName(''); setEditing(null); setError(''); toast.success(editing ? 'Option updated' : 'Option added'); load();
-    } catch (e) { setError(e.message); toast.error(e.message); }
-    finally { setBusy(false); }
-  };
-  const edit = (option) => { setEditing(option); setName(option.name); setError(''); };
-  const cancel = () => { setEditing(null); setName(''); setError(''); };
-  const remove = async () => {
-    setBusy(true);
-    try { await api(`/api/products/${confirm.id}`, { method: 'DELETE' }); toast.success('Option deleted'); load(); } catch (e) { toast.error(e.message); }
-    setBusy(false); setConfirm(null);
-  };
-  const ActionIcon = editing ? Save : Plus;
-  return (
-    <div className="max-w-7xl">
-      <PageHeader title="Settings" description="Configure the Add Invoice form and the dashboard filters." />
-      <div className="grid items-start gap-5 lg:grid-cols-2">
-      <SettingsGroup id="group-form" tone="brand" icon={FilePlus2} eyebrow="Add Invoice form" title="Invoice form" description="What people can pick and fill in when they add or edit an invoice.">
-      <ClientsSection />
-      <section className="card card-pad" aria-labelledby="products-heading">
-        <div className="mb-4"><h3 id="products-heading" className="section-title">Product/Service options</h3><p className="mt-1 text-sm text-fg-muted">These options appear in the Add and Edit Invoice forms.</p></div>
-        <form onSubmit={save} className="flex flex-col gap-2 sm:flex-row">
-          <label className="sr-only" htmlFor="product-option-name">Product or service name</label>
-          <input id="product-option-name" className={`input ${error ? 'input-error' : ''}`} aria-invalid={Boolean(error)} aria-describedby={error ? 'product-option-error' : undefined} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Consulting Services" />
-          <button type="submit" className="btn btn-primary" disabled={busy}><ActionIcon size={16} aria-hidden="true" />{editing ? 'Save Changes' : 'Add Option'}</button>
-          {editing && <button type="button" className="btn btn-ghost" onClick={cancel}><X size={16} aria-hidden="true" />Cancel</button>}
-        </form>
-        {error && <p id="product-option-error" role="alert" className="mt-2 text-sm text-danger-ink">{error}</p>}
-        <div className="mt-5 border-t border-line">
-          {loading ? <div className="space-y-2 py-4"><Skeleton className="h-9" /><Skeleton className="h-9" /><Skeleton className="h-9" /></div>
-            : !options.length ? <EmptyState compact icon={Package} title="No options yet" description="Add your first product or service above." />
-            : <ExpandableList className="divide-y divide-line" items={options} limit={6} render={(option) => (
-              <li key={option.id} className="flex items-center justify-between gap-3 py-2.5">
-                <span className="text-sm text-fg">{option.name}</span>
-                <span className="flex shrink-0 gap-1">
-                  <button type="button" className="btn btn-ghost btn-icon !h-8 !w-8" onClick={() => edit(option)} aria-label={`Edit ${option.name}`} title="Edit"><Pencil size={15} /></button>
-                  <button type="button" className="btn btn-ghost btn-icon !h-8 !w-8 hover:!bg-danger-soft hover:!text-danger-ink" onClick={() => setConfirm(option)} aria-label={`Delete ${option.name}`} title="Delete"><Trash2 size={15} /></button>
+  const { section } = useParams();
+
+  if (!section) {
+    return (
+      <div className="mx-auto w-full max-w-4xl space-y-6">
+        <PageHeader
+          title="Settings"
+          description="Choose what you would like to manage. Each area opens separately so you can focus on one thing at a time."
+        />
+        <nav aria-label="Settings sections">
+          <div className="mb-3 flex items-center gap-2 px-1">
+            <Settings2 size={16} className="text-fg-subtle" aria-hidden="true" />
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-fg-muted">Settings areas</h2>
+          </div>
+          <div className="flex flex-col gap-3">
+            {SECTIONS.map(({ key, title, description, category, icon: Icon, tone }) => (
+              <Link
+                key={key}
+                to={`/settings/${key}`}
+                className="group flex min-w-0 items-center gap-4 rounded-2xl border border-line bg-surface px-4 py-4 text-left shadow-sm outline-none transition-colors hover:border-brand/40 hover:bg-surface-2/60 focus-visible:ring-2 focus-visible:ring-brand/40 sm:px-5 sm:py-5"
+                aria-label={`Open ${title} settings`}
+              >
+                <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${tone}`} aria-hidden="true">
+                  <Icon size={23} strokeWidth={1.8} />
                 </span>
-              </li>)} />}
-        </div>
-      </section>
-      <InvoiceFieldsSection />
-      <PaymentTimelineSettings />
-      </SettingsGroup>
-      <SettingsGroup id="group-dashboard" tone="info" icon={LayoutDashboard} eyebrow="Dashboard" title="Dashboard filters" description="Which filters appear above the dashboard charts. These don’t change the Add Invoice form.">
-        <DashboardFiltersSection />
-      </SettingsGroup>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-medium uppercase tracking-wider text-fg-subtle">{category}</span>
+                  <span className="mt-0.5 block text-sm font-semibold text-fg sm:text-base">{title}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-fg-muted sm:text-sm">{description}</span>
+                </span>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface-2 text-fg-muted transition-colors group-hover:border-brand/30 group-hover:bg-brand-soft group-hover:text-brand-ink" aria-hidden="true">
+                  <ChevronRight size={18} />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </nav>
       </div>
-      {confirm && (
-        <Modal title="Delete option?" description="Existing invoices will keep this value." onClose={() => !busy && setConfirm(null)} width="max-w-md"
-          footer={<><button type="button" className="btn btn-secondary" onClick={() => setConfirm(null)} disabled={busy}>Cancel</button><button type="button" className="btn btn-danger" onClick={remove} disabled={busy}>{busy ? 'Deleting…' : 'Delete option'}</button></>}>
-          <p className="text-sm text-fg">Delete <b>{confirm.name}</b> from the list of product and service options?</p>
-        </Modal>)}
+    );
+  }
+
+  const active = SECTIONS.find((item) => item.key === section);
+  if (!active) return <Navigate to="/settings" replace />;
+
+  const Icon = active.icon;
+  const Content = active.Component;
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-5">
+      <nav aria-label="Settings navigation">
+        <Link
+          to="/settings"
+          className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-brand"
+        >
+          <ArrowLeft size={17} aria-hidden="true" />
+          All settings
+        </Link>
+      </nav>
+      <header className="flex items-start gap-4 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${active.tone}`} aria-hidden="true">
+          <Icon size={23} strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wider text-fg-subtle">{active.category}</p>
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-fg">{active.title}</h1>
+          <p className="mt-1 text-sm text-fg-muted">{active.description}</p>
+        </div>
+      </header>
+      <div className="w-full min-w-0">
+        <Content />
+      </div>
     </div>
   );
 }
