@@ -90,7 +90,7 @@ export function buildInvoiceWorkbook(invoices, fields = [], generatedAt = new Da
  ['Payment timeline updates',numCell(timelineRows.length),'Detailed in Payment History sheet'],
  ['Data scope','All records','No page limit and no active screen filters'],
  ['Source','Invoice & Delivery Tracker','Saved database values at export time']
- ],[30,28,58],[2,3,4]);
+ ],[30,28,58],[1]);
  const register=sheet('Invoice Register',headers,invoiceRows,[19,17,27,19,42,17,40,13,17,20,20,20,19,17,19,46,13,27,27,...fields.map(()=>23)],[9,10,11],[1,8,13],[12,14]);
  const items=sheet('Line Items',['Invoice No.','Record ID','Line #','Client','Product / Service','Quantity','Unit Cost (PHP)','Line Amount (PHP)','Payment Status'],itemRows,[20,13,12,27,38,14,20,22,21],[6,7],[],[8]);
  const customs=sheet('Custom Fields',['Invoice No.','Field','Field Type','Saved Value','Field Availability'],customRows,[20,30,19,48,24]);
