@@ -33,6 +33,7 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/settings/:section" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </div>
