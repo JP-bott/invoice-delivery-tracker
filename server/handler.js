@@ -4,6 +4,7 @@ import { validateInvoice } from './services/validate.js';
 import * as inv from './services/invoiceService.js';
 import * as products from './services/productService.js';
 import * as clients from './services/clientService.js';
+import * as timeline from './services/paymentTimelineService.js';
 import * as cf from './services/customFieldService.js';
 import { handlers, dashboard } from './services/dashboardService.js';
 import * as dashboardFilters from './services/dashboardFilterService.js';
@@ -72,6 +73,35 @@ async function route(method, seg, query, body) {
     if (a !== undefined || extra !== undefined) return null;
     if (method === 'GET') return () => dashboardFilters.get().then(ok);
     if (method === 'PUT') return () => dashboardFilters.save(body).then(ok);
+    return null;
+  }
+
+  if (area === 'timeline-stages') {
+    if (a === undefined && extra === undefined) {
+      if (method === 'GET') return () => timeline.stages().then(ok);
+      if (method === 'POST') return () => timeline.createStage(body).then((r) => ok(r, 201));
+    }
+    if (a === 'order' && extra === undefined && method === 'PUT') return () => timeline.reorderStages(body?.ids).then(ok);
+    if (a !== undefined && extra === undefined) {
+      const id = idOf(a);
+      if (id == null) return null;
+      if (method === 'PUT') return () => timeline.updateStage(id, body).then((r) => r ? ok(r) : notFound('Stage not found'));
+      if (method === 'DELETE') return () => timeline.archiveStage(id).then((r) => r ? { status: 204 } : notFound('Stage not found'));
+    }
+    return null;
+  }
+  if (area === 'invoices' && extra === 'timeline') {
+    const id = idOf(a), event = seg[4];
+    if (id == null || seg.length > 5) return null;
+    if (event === undefined) {
+      if (method === 'GET') return () => timeline.timeline(id).then(ok);
+      if (method === 'POST') return () => timeline.addEvent(id, body).then((r) => ok(r, 201));
+    } else {
+      const eventId = idOf(event);
+      if (eventId == null) return null;
+      if (method === 'PUT') return () => timeline.updateEvent(id, eventId, body).then(ok);
+      if (method === 'DELETE') return () => timeline.removeEvent(id, eventId).then((r) => r ? { status: 204 } : notFound('Timeline update not found'));
+    }
     return null;
   }
   if (extra !== undefined) return null;
