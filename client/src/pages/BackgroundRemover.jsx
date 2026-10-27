@@ -81,7 +81,7 @@ export default function BackgroundRemover() {
     document.body.appendChild(link);link.click();link.remove();
   };
   return <div className="mx-auto max-w-6xl space-y-5">
-    <PageHeader title="Image Background Remover" description="Remove backgrounds with open-source AI. Your photos stay in your browser and your results download as transparent PNGs." actions={file&&<button className="btn btn-secondary" disabled={busy||checking} onClick={reset}><RefreshCw size={15}/>New image</button>}/>
+    <PageHeader title="Image Background Remover" description="Remove backgrounds with open-source AI. Your photos stay in your browser. BiRefNet General Lite produces a transparent PNG you can refine and download." actions={file&&<button className="btn btn-secondary" disabled={busy||checking} onClick={reset}><RefreshCw size={15}/>New image</button>}/>
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
       <div className="space-y-5">
         <section className="card card-pad space-y-4" aria-label="Image upload and background removal">
@@ -110,7 +110,7 @@ export default function BackgroundRemover() {
           {error&&<p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-ink">{error}</p>}
           {(busy||checking)&&<div role="status" aria-live="polite" className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-fg-muted"><LoaderCircle className="animate-spin text-brand" size={17}/><span>{checking?'Checking image…':progress.message}</span></div>
-            {busy&&<div className="h-1.5 overflow-hidden rounded-full bg-surface-3"><div className="h-full rounded-full bg-brand transition-[width]" style={{width:`${progress.percent??12}%`}}/></div>}
+            {busy&&progress.percent!==null&&<div className="h-1.5 overflow-hidden rounded-full bg-surface-3" role="progressbar" aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100}><div className="h-full rounded-full bg-brand transition-[width]" style={{width:`${progress.percent}%`}}/></div>}
           </div>}
           <button type="button" className="btn btn-primary !h-11 w-full justify-center" disabled={!file||busy||checking} onClick={remove}>
             {busy?<LoaderCircle className="animate-spin" size={17}/>:<Scissors size={17}/>}
@@ -148,7 +148,7 @@ export default function BackgroundRemover() {
       </div>
       <aside className="space-y-4">
         <div className="card card-pad"><div className="flex items-center gap-2"><ShieldCheck size={18} className="text-success-ink"/><h3 className="font-semibold text-fg">Private processing</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Images are processed on your device. No image is uploaded to the app server or stored in the invoice database.</p><p className="mt-3 flex items-center gap-2 text-xs text-fg-subtle"><LockKeyhole size={14}/>Nothing saved after this session</p></div>
-        <div className="card card-pad"><div className="flex items-center gap-2"><Sparkles size={18} className="text-brand"/><h3 className="font-semibold text-fg">Open-source AI</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Powered by open-source ORMBG using CPU WebAssembly compatibility mode. The model downloads on first use. CPU processing may take longer but avoids the reported WebGPU shader issue.</p><p className="mt-3 text-xs leading-relaxed text-fg-subtle">Use the creative studio to refine edges, erase or restore the subject, change the background, and export in PNG or JPG. AI masks may still need manual touch-up.</p></div>
+        <div className="card card-pad"><div className="flex items-center gap-2"><Sparkles size={18} className="text-brand"/><h3 className="font-semibold text-fg">Open-source AI</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Powered by MIT-licensed BiRefNet General Lite model weights and Apache-2.0 Transformers.js running locally in WebAssembly. The model downloads on first use and is cached in your browser. CPU inference may require substantial memory and time.</p><p className="mt-3 text-xs leading-relaxed text-fg-subtle">Use the creative studio to refine edges, erase or restore the subject, change the background, and export in PNG or JPG. AI masks may still need manual touch-up.</p></div>
       </aside>
     </div>
     {result&&dialog&&<Modal title="Your image is ready" description="Background removed successfully. Download your finished image." width="max-w-md" onClose={()=>setDialog(false)} footer={<>
