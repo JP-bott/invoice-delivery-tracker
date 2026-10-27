@@ -1,116 +1,137 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { RefreshCw, X } from 'lucide-react';
-import { api, qs } from '../utils/api.js';
-import { range } from '../utils/dates.js';
-import { PRESETS } from '../utils/constants.js';
-import SummaryCards from '../components/dashboard/SummaryCards.jsx';
-import RecentTransactions from '../components/dashboard/RecentTransactions.jsx';
-import DashboardAnalytics from '../components/dashboard/DashboardAnalytics.jsx';
-import CollectionsOverview from '../components/dashboard/CollectionsOverview.jsx';
-import { PageHeader, Skeleton } from '../components/ui.jsx';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, RefreshCw, Wallet } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { api, peso, qs } from '../utils/api.js';
+import { today } from '../utils/dates.js';
+import { dashboardBounds } from '../../../shared/dashboardReport.js';
+import ChartCard from '../components/dashboard/ChartCard.jsx';
+import { EmptyState, PageHeader, Skeleton } from '../components/ui.jsx';
 
-// Used only if the filter settings can't be loaded: the two filters the dashboard has always had.
-const FALLBACK_FILTERS = [
-  { key: 'client', label: 'Client', aria_label: 'Client', control: 'select', source: 'clients', all_label: 'All clients', enabled: true },
-  { key: 'product', label: 'Product/Service', aria_label: 'Product or service', control: 'select', source: 'products', all_label: 'All products', enabled: true },
-];
-const sameValues = (a, b) => [...new Set([...Object.keys(a), ...Object.keys(b)])].every((k) => (a[k] || '') === (b[k] || ''));
-const selectList = (def, opts) => (def.source ? (opts[def.source] || []).map((v) => ({ value: v, label: v })) : def.options || []);
-
-// One filter chosen in Settings > Dashboard filters. Selects and dates apply at once; text and numbers wait for a pause in typing.
-function FilterControl({ def, value, opts, onChange }) {
-  const cls = 'input !w-auto max-w-[12rem]';
-  if (def.control === 'select') {
-    const list = selectList(def, opts);
-    return (
-      <select aria-label={def.aria_label || def.label} className={cls} value={value} onChange={(e) => onChange(e.target.value, true)}>
-        <option value="">{def.all_label}</option>
-        {value && !list.some((o) => o.value === value) && <option value={value}>{value}</option>}
-        {list.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    );
-  }
-  const type = def.control === 'date' ? 'date' : def.control === 'number' ? 'number' : 'text';
-  return <input aria-label={def.aria_label || def.label} type={type} step={type === 'number' ? 'any' : undefined} placeholder={def.control === 'text' ? `${def.label} contains…` : def.label} className={cls} value={value} onChange={(e) => onChange(e.target.value, type === 'date')} />;
+const VALID=['month','quarter','year'];
+const tones={success:'text-success-ink bg-success-soft',danger:'text-danger-ink bg-danger-soft',brand:'text-brand-ink bg-brand-soft',warning:'text-warning-ink bg-warning-soft'};
+const currency=v=>peso(v||0);
+const asNumber=v=>new Intl.NumberFormat('en-PH',{maximumFractionDigits:2}).format(v||0);
+const colors=['var(--chart-1)','var(--chart-2)','var(--chart-3)','var(--chart-4)','var(--chart-5)'];
+const tipStyle={background:'var(--surface)',border:'1px solid var(--line)',borderRadius:9,color:'var(--fg)'};
+const axis={tick:{fill:'var(--fg-muted)',fontSize:11},axisLine:false,tickLine:false};
+const bars=(rows,key,highlight)=>rows.map((row,i)=><Cell key={row.name||row.label||i} fill={highlight?.(row)||'var(--chart-1)'}/>);
+function Tile({title,value,subtitle,tone='brand',onClick}) {
+  const Inner=<><div className="flex items-start justify-between gap-2"><span className="text-sm text-fg-muted">{title}</span><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${tones[tone]}`}>{tone==='danger'?'Attention':tone==='success'?'Good':'Overview'}</span></div>
+    <p className="num mt-3 break-all text-2xl font-semibold tracking-tight text-fg">{value}</p>
+    {subtitle&&<p className="mt-1 text-xs text-fg-muted">{subtitle}</p>}</>;
+  return onClick?<button type="button" onClick={onClick} className="card card-pad block w-full text-left transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-brand">{Inner}</button>:
+    <div className="card card-pad">{Inner}</div>;
 }
-
-const ENDPOINTS = ['summary', 'analytics', 'delivery-summary', 'recent-invoices', 'invoice-overview'];
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading dashboard">
-      <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[120px]" />)}</div>
-      <div className="grid gap-4 lg:grid-cols-5"><Skeleton className="h-[400px] lg:col-span-3" /><Skeleton className="h-[400px] lg:col-span-2" /></div>
-      <div className="grid gap-4 lg:grid-cols-5"><Skeleton className="h-[320px] lg:col-span-2" /><Skeleton className="h-[320px] lg:col-span-3" /></div>
-      <Skeleton className="h-72" />
-    </div>
-  );
+const ChartBox=({title,description,children,className=''})=><section className={`card card-pad min-w-0 ${className}`}><h2 className="section-title">{title}</h2>{description&&<p className="mt-1 text-xs text-fg-muted">{description}</p>}<div className="mt-4">{children}</div></section>;
+const Empty=({label='No invoices in this period'})=><EmptyState compact icon={BarChart3} title={label} description="Records will appear here when invoices are added."/>;
+const List=({rows=[],onOpen,empty='No matching invoices'})=><div className="max-h-72 overflow-auto">{!rows.length?<Empty label={empty}/>:<table className="w-full min-w-[360px] text-left text-sm"><thead><tr className="border-b border-line text-xs text-fg-muted"><th className="p-2">Invoice</th><th className="p-2">Client</th><th className="p-2">Due / Delivered</th><th className="p-2 text-right">Amount</th></tr></thead><tbody>{rows.map(row=><tr key={row.id} className="border-b border-line/50"><td className="p-2"><button className="font-medium text-brand-ink hover:underline" onClick={()=>onOpen(row)}>{row.invoice_no}</button></td><td className="max-w-[160px] truncate p-2">{row.client_name}</td><td className="p-2 text-xs text-fg-muted">{row.due_date||row.delivery_date||'—'}</td><td className="p-2 text-right tabular-nums">{currency(row.outstanding||row.amount_paid)}</td></tr>)}</tbody></table>}</div>;
+function MoneyBars({items=[],dataKey='value',horizontal=false,max=10}) {
+ const data=items.slice(0,max);
+ if(!data.length)return <Empty/>;
+ return <div className={horizontal?'h-[320px]':'h-[260px]'} role="img" aria-label={`Bar chart of ${dataKey}`}>
+ <ResponsiveContainer width="100%" height="100%">
+ <BarChart data={data} layout={horizontal?'vertical':'horizontal'} margin={{top:8,right:16,bottom:8,left:horizontal?18:0}}>
+ <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" horizontal={!horizontal} vertical={horizontal}/>
+ {horizontal?<><XAxis type="number" {...axis}/><YAxis type="category" dataKey="name" width={125} {...axis}/></>:<><XAxis dataKey="label" {...axis}/><YAxis {...axis} width={54}/></>}
+ <Tooltip formatter={v=>dataKey==='quantity'?asNumber(v):currency(v)} contentStyle={tipStyle}/>
+ <Bar dataKey={dataKey} maxBarSize={48} radius={horizontal?[0,5,5,0]:[5,5,0,0]}>{bars(data,dataKey)}</Bar>
+ </BarChart></ResponsiveContainer></div>;
 }
-
-export default function Dashboard() {
-  const navigate = useNavigate();
-  const [preset, setPreset] = useState('month');
-  const [customFrom, setCustomFrom] = useState(''), [customTo, setCustomTo] = useState('');
-  const [filterDefs, setFilterDefs] = useState(null); // filters enabled in Settings (null until loaded)
-  const [values, setValues] = useState({}), [applied, setApplied] = useState({}); // what the controls show / what the charts use
-  const [opts, setOpts] = useState({ clients: [], products: [] });
-  const [d, setD] = useState(null), [loading, setLoading] = useState(true), [err, setErr] = useState('');
-  const [tick, setTick] = useState(0);
-
-  useEffect(() => { Promise.all([api('/api/filters/clients'), api('/api/filters/products')]).then(([clients, products]) => setOpts({ clients, products })).catch(() => {}); }, [tick]);
-  useEffect(() => { api('/api/dashboard-filters').then((r) => setFilterDefs(r.filters.filter((x) => x.enabled))).catch(() => setFilterDefs(FALLBACK_FILTERS)); }, [tick]);
-  useEffect(() => { const t = setTimeout(() => setApplied((prev) => (sameValues(prev, values) ? prev : values)), 300); return () => clearTimeout(t); }, [values]);
-  const shownDefs = useMemo(() => filterDefs || [], [filterDefs]);
-  // Only filters that are currently enabled are applied; a value left over from a filter turned off in Settings is ignored.
-  const active = useMemo(() => Object.fromEntries(shownDefs.map((x) => [x.key, String(applied[x.key] ?? '').trim()]).filter(([, v]) => v)), [shownDefs, applied]);
-  const activeKey = qs(active);
-  const setValue = (key, value, now) => { const next = { ...values, [key]: value }; setValues(next); if (now) setApplied(next); };
-  useEffect(() => {
-    const reportRange = preset === 'custom' ? { dateFrom: customFrom, dateTo: customTo } : range(preset);
-    const q = qs({ ...reportRange, ...active });
-    let live = true;
-    setLoading(true);
-    // KPI counts are "as of now": same client/product filters, but never limited by the date range.
-    Promise.all([...ENDPOINTS.map((n) => api(`/api/dashboard/${n}?${q}`)), api(`/api/dashboard/summary?${qs(active)}`)])
-      .then(([summary, analytics, delivery, recent, overview, now]) => { if (live) { setD({ summary, now, analytics, delivery, recent, overview }); setErr(''); } })
-      .catch((e) => live && setErr(e.message)).finally(() => live && setLoading(false));
-    return () => { live = false; };
-  }, [preset, customFrom, customTo, activeKey, tick]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const reportRange = preset === 'custom' ? { dateFrom: customFrom, dateTo: customTo } : range(preset);
-  const openNow = (extra = {}) => navigate(`/invoices?${qs({ ...active, ...extra })}`);
-  const label = PRESETS.find(([v]) => v === preset)?.[1];
-  const periodLabel = useMemo(() => (reportRange.dateFrom && reportRange.dateTo ? `${reportRange.dateFrom} to ${reportRange.dateTo}` : preset === 'all' ? 'All time' : 'Choose a start and end date'), [reportRange.dateFrom, reportRange.dateTo, preset]); // eslint-disable-line react-hooks/exhaustive-deps
-  const dirty = preset !== 'month' || shownDefs.some((x) => values[x.key]);
-  const clear = () => { setPreset('month'); setCustomFrom(''); setCustomTo(''); setValues({}); setApplied({}); };
-  // "Financial overview · This Month · Acme · Cement": client and product by name, other filters as "Label: value".
-  const filterSummary = shownDefs.filter((x) => active[x.key]).map((x) => {
-    const v = x.control === 'select' ? selectList(x, opts).find((o) => o.value === active[x.key])?.label ?? active[x.key] : active[x.key];
-    return x.key === 'client' || x.key === 'product' ? v : `${x.label}: ${v}`;
-  });
-
-  return (
-    <div>
-      <PageHeader title="Dashboard" description={['Financial overview', label, ...filterSummary].join(' · ')}
-        actions={<>
-          <button type="button" className="btn btn-secondary" onClick={() => setTick((t) => t + 1)} disabled={loading} aria-label="Refresh data"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} aria-hidden="true" /><span className="hidden sm:inline">Refresh</span></button>
-        </>} />
-
-      <div role="group" aria-label="Dashboard filters" className="mb-5 flex flex-wrap items-center gap-2">
-        <select aria-label="Date range" className="input !w-auto" value={preset} onChange={(e) => setPreset(e.target.value)}>{PRESETS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-        {preset === 'custom' && <><input aria-label="Custom start date" type="date" className="input !w-auto" value={customFrom} max={customTo || undefined} onChange={(e) => setCustomFrom(e.target.value)} /><span className="text-fg-subtle" aria-hidden="true">–</span><input aria-label="Custom end date" type="date" className="input !w-auto" value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)} /></>}
-        {shownDefs.map((x) => <FilterControl key={x.key} def={x} value={values[x.key] ?? ''} opts={opts} onChange={(v, now) => setValue(x.key, v, now)} />)}
-        {dirty && <button type="button" className="btn btn-ghost" onClick={clear}><X size={14} aria-hidden="true" />Clear</button>}
-      </div>
-
-      {err && <div role="alert" className="mb-4 rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-ink">{err}</div>}
-      {loading && !d ? <DashboardSkeleton /> : d && (
-        <div className={`space-y-4 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
-          <SummaryCards s={d.now} receivables={d.analytics.receivables} onOpenInvoices={openNow} />
-          <CollectionsOverview data={d.overview} periodLabel={periodLabel} onOpenInvoices={openNow} onOpenPeriod={() => openNow(reportRange)} unpaidCard={<DashboardAnalytics data={d.analytics} />} />
-          <RecentTransactions data={d.recent} />
-        </div>)}
-    </div>
-  );
+const names=xs=>xs.map(x=>x.label||x.name).join(', ')||'—';
+function YearView({d,open}) {
+ const months=d.monthly;const best=d.highlights.bestMonths;const low=d.highlights.lowestMonths;
+ const highKeys=new Set(best.map(x=>x.key)),lowKeys=new Set(low.map(x=>x.key));
+ return <div className="space-y-4">
+ <div className="grid gap-3 sm:grid-cols-3">
+ <Tile title="Total Sales This Year" value={currency(d.kpis.totalSales)} subtitle={`${d.kpis.invoiceCount} invoices`}/>
+ <Tile title="Best month" value={names(best)} subtitle={best.length?currency(best[0].value):'—'} tone="success"/>
+ <Tile title="Top client" value={names(d.highlights.topClients)} subtitle={d.highlights.topClients.length?currency(d.highlights.topClients[0].value):'—'}/>
+ </div>
+ <ChartBox title="Monthly Sales" description="Total sales by month, including months with zero sales">
+ <div className="h-[290px]" role="img" aria-label="Monthly sales column chart">
+ <ResponsiveContainer><BarChart data={months} margin={{top:15,right:12,left:8,bottom:5}}><CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" vertical={false}/><XAxis dataKey="label" {...axis}/><YAxis {...axis} width={58}/><Tooltip formatter={currency} contentStyle={tipStyle}/><Bar dataKey="value" name="Sales" radius={[5,5,0,0]} maxBarSize={48}>{months.map(m=><Cell key={m.key} fill={highKeys.has(m.key)?'var(--success)':lowKeys.has(m.key)?'var(--warning)':'var(--chart-1)'}/>)}</Bar></BarChart></ResponsiveContainer></div>
+ <div className="mt-3 flex flex-wrap gap-3 text-xs text-fg-muted"><span className="text-success-ink">Highest: {names(best)} · {best.length?currency(best[0].value):'—'}</span><span className="text-warning-ink">Lowest: {names(low)} · {low.length?currency(low[0].value):'—'}</span></div></ChartBox>
+ <div className="grid gap-4 lg:grid-cols-2">
+ <ChartBox title="Top clients by sales"><MoneyBars items={d.clients} horizontal/><p className="mt-2 text-xs text-fg-muted">Top: {names(d.highlights.topClients)} · Lowest: {names(d.highlights.lowestClients)}</p></ChartBox>
+ <ChartBox title="Products & services by quantity"><MoneyBars items={d.productsByQuantity} dataKey="quantity" horizontal/><p className="mt-2 text-xs text-fg-muted">Most availed: {names(d.highlights.mostAvailed)} · Least availed: {names(d.highlights.leastAvailed)}</p></ChartBox>
+ </div>
+ <ChartBox title="Products & services by sales value"><MoneyBars items={d.productsBySales} horizontal/>{d.missingItemPrices>0&&<p className="mt-2 text-xs text-warning-ink">{d.missingItemPrices} older line items have no saved price; those amounts cannot be allocated.</p>}</ChartBox>
+ </div>;
+}
+function MonthView({d,open}) {
+ const m=d.month,c=m.counts,a=m.amounts;
+ const donut=[{name:'Upcoming',value:c.upcoming,color:'var(--chart-1)'},{name:'Past Due',value:c.overdue,color:'var(--danger)'},{name:'Paid',value:c.paid,color:'var(--success)'}];
+ const go=(type)=>open({dateFrom:d.period.from,dateTo:d.period.to,
+   ...(type==='paid'?{paymentStatus:'Paid',deliveryStatus:'Delivered'}:
+     type==='overdue'?{paymentStatus:'unpaid'}:{paymentStatus:'unpaid'})});
+ return <div className="space-y-4">
+ <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+ <Tile title="Collection Rate" value={`${asNumber(d.kpis.collectionRate)}%`} subtitle="Recorded payments ÷ billed amount"/>
+ <Tile title="Upcoming Invoices" value={asNumber(c.upcoming)} subtitle={currency(a.upcoming)+' outstanding'} onClick={()=>go('upcoming')}/>
+ <Tile title="Past Due Invoices" value={asNumber(c.overdue)} subtitle={currency(a.overdue)+' outstanding'} tone="danger" onClick={()=>go('overdue')}/>
+ <Tile title="Paid & Delivered" value={asNumber(c.paid)} subtitle={currency(a.paid)+' collected'} tone="success" onClick={()=>go('paid')}/>
+ </div>
+ <div className="grid gap-4 lg:grid-cols-2">
+ <ChartBox title="Invoice status breakdown" description="Other includes undelivered paid records and invoices without a due date">
+ <div className="h-[260px]" role="img" aria-label="Invoice status donut"><ResponsiveContainer><PieChart><Pie data={donut.filter(x=>x.value>0)} dataKey="value" nameKey="name" innerRadius={62} outerRadius={90} paddingAngle={2} onClick={e=>go(String(e.name)==='Paid'?'paid':String(e.name)==='Past Due'?'overdue':'upcoming')}>{donut.filter(x=>x.value>0).map(x=><Cell key={x.name} fill={x.color}/>)}</Pie><Tooltip contentStyle={tipStyle}/><Legend/></PieChart></ResponsiveContainer></div>
+ <div className="flex flex-wrap gap-2">{donut.map(x=><button key={x.name} type="button" onClick={()=>go(x.name==='Paid'?'paid':x.name==='Past Due'?'overdue':'upcoming')} className="btn btn-secondary btn-sm">{x.name}: {x.value}</button>)}</div></ChartBox>
+ <ChartBox title="Past due aging" description="Unpaid invoices, grouped by days overdue"><MoneyBars items={m.aging.map(x=>({...x,label:x.label,value:x.count}))}/></ChartBox>
+ </div>
+ <div className="grid gap-4 lg:grid-cols-2">
+ <ChartBox title={`Upcoming invoices · ${c.upcoming}`}><List rows={m.lists.upcoming} onOpen={x=>open({q:x.invoice_no})}/></ChartBox>
+ <ChartBox title={`Past due invoices · ${c.overdue}`}><List rows={m.lists.overdue} onOpen={x=>open({q:x.invoice_no})}/></ChartBox>
+ </div>
+ <ChartBox title={`Paid and delivered in this month · ${c.paid}`} description="Based on current payment status and delivery date; payment dates are not stored"><List rows={m.lists.paid} onOpen={x=>open({q:x.invoice_no})}/></ChartBox>
+ </div>;
+}
+function QuarterView({d,open}) {
+ const q=d.quarter,delta=d.kpis.quarterChangePercent;
+ return <div className="space-y-4">
+ <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+ <Tile title="Quarterly Sales" value={currency(d.kpis.totalSales)}/>
+ <Tile title="vs Previous Quarter" value={delta==null?'No prior sales':`${delta>=0?'+':''}${asNumber(delta)}%`} subtitle={`Previous: ${currency(d.kpis.previousQuarter)}`} tone={delta!=null&&delta<0?'danger':'success'}/>
+ <Tile title="Collected" value={currency(d.kpis.collected)} subtitle={`${asNumber(d.kpis.collectionRate)}% of billed`}/>
+ <Tile title="Delivered" value={asNumber(q.delivery.delivered)} subtitle={`${q.delivery.pending} pending deliveries`}/>
+ </div>
+ <div className="grid gap-4 lg:grid-cols-2">
+ <ChartBox title="Monthly sales this quarter"><MoneyBars items={d.monthly}/><p className="mt-2 text-xs text-success-ink">Best: {names(d.highlights.bestMonths)}</p></ChartBox>
+ <ChartBox title="Billed vs Collected"><div className="h-[260px]" role="img" aria-label="Monthly billed and collected comparison"><ResponsiveContainer><BarChart data={d.monthly}><CartesianGrid stroke="var(--chart-grid)" vertical={false}/><XAxis dataKey="label" {...axis}/><YAxis width={60} {...axis}/><Tooltip formatter={currency} contentStyle={tipStyle}/><Legend/><Bar dataKey="value" name="Billed" fill="var(--chart-1)" radius={[4,4,0,0]}/><Bar dataKey="collected" name="Collected" fill="var(--success)" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div></ChartBox>
+ <ChartBox title="Top 5 clients"><MoneyBars items={d.clients} horizontal max={5}/></ChartBox>
+ <ChartBox title="Top products & services"><MoneyBars items={d.productsBySales} horizontal max={5}/></ChartBox>
+ <ChartBox title="Invoice status mix"><div className="grid grid-cols-3 gap-2">{Object.entries(q.status).map(([key,n])=><div key={key} className="rounded-lg bg-surface-2 p-3 text-center"><p className="text-xs capitalize text-fg-muted">{key}</p><p className="num mt-2 text-xl font-semibold">{n}</p></div>)}</div></ChartBox>
+ <ChartBox title="Delivery progress"><div className="grid grid-cols-2 gap-3"><Tile title="Delivered" value={q.delivery.delivered} tone="success" onClick={()=>open({dateFrom:d.period.from,dateTo:d.period.to,deliveryStatus:'Delivered'})}/><Tile title="Pending" value={q.delivery.pending} onClick={()=>open({dateFrom:d.period.from,dateTo:d.period.to,deliveryStatus:'Pending'})}/></div></ChartBox>
+ </div>
+ </div>;
+}
+function Loading(){return <div className="space-y-4" aria-busy="true" aria-label="Loading dashboard"><div className="grid gap-3 sm:grid-cols-3">{[0,1,2].map(n=><Skeleton key={n} className="h-28"/>)}</div><Skeleton className="h-[315px]"/><div className="grid gap-4 lg:grid-cols-2"><Skeleton className="h-80"/><Skeleton className="h-80"/></div></div>;}
+export default function Dashboard(){
+ const [search,setSearch]=useSearchParams();const navigate=useNavigate();
+ const selected=VALID.includes(search.get('range'))?search.get('range'):'month';
+ const [d,setD]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const [refresh,setRefresh]=useState(0);
+ const current=today(),bounds=dashboardBounds(selected,current);
+ useEffect(()=>{
+   let live=true;setLoading(true);setD(null);
+   api(`/api/dashboard/period-report?${qs({range:selected})}`)
+     .then(r=>{if(live){setD(r);setError('');}})
+     .catch(e=>{if(live)setError(e.message);})
+     .finally(()=>{if(live)setLoading(false);});
+   return ()=>{live=false;};
+ },[selected,refresh,current]);
+ const choose=(value)=>{const next=new URLSearchParams(search);next.set('range',value);setSearch(next,{replace:true});};
+ const open=(filters={})=>navigate(`/invoices?${qs(filters)}`);
+ return <div className="space-y-5">
+ <PageHeader title="Dashboard" description="Invoice and sales performance" actions={<button type="button" className="btn btn-secondary" disabled={loading} onClick={()=>setRefresh(n=>n+1)}><RefreshCw size={15} className={loading?'animate-spin':''}/>Refresh</button>}/>
+ <div className="flex flex-wrap items-center gap-3" role="group" aria-label="Dashboard period">
+  <CalendarDays size={18} className="text-fg-muted" aria-hidden="true"/>
+  {VALID.map(key=><button type="button" key={key} onClick={()=>choose(key)} aria-pressed={selected===key}
+    className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-brand ${selected===key?'border-brand bg-brand-soft text-brand-ink':'border-line bg-surface text-fg-muted hover:bg-surface-2'}`}>{key==='month'?'This Month':key==='year'?'This Year':`This Quarter – Q${bounds.quarter}`}</button>)}
+ </div>
+ {error&&<div role="alert" className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-ink">{error}</div>}
+ {loading?<Loading/>:!d?<Empty label="Could not load dashboard"/>:d.kpis.invoiceCount===0?<div className="card card-pad"><Empty label="No invoices in this period"/></div>:
+ selected==='month'?<MonthView key="month" d={d} open={open}/>:
+ selected==='quarter'?<QuarterView key="quarter" d={d} open={open}/>:
+ <YearView key="year" d={d} open={open}/>}
+ </div>;
 }

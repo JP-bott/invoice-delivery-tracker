@@ -1,4 +1,5 @@
 import { getDb } from '../database/db.js';
+import { dashboardBounds, aggregateDashboard } from '../../shared/dashboardReport.js';
 import { toPesos } from './money.js';
 import { buildWhere } from './filterBuilder.js';
 import { toApi } from './invoiceService.js';
@@ -27,6 +28,31 @@ const groupClients = (rows) => Object.values(rows.reduce((groups, row) => {
 }, {})).sort((a, b) => b.outstanding - a.outstanding).map((group) => ({ ...group, outstanding: toPesos(group.outstanding) }));
 
 export const handlers = {
+  // Date-scoped dashboard. Amounts are saved VAT-inclusive invoice totals;
+  // payment collections reflect currently recorded amounts, not payment dates.
+  async 'period-report'(q) {
+    const b = dashboardBounds(q.range || 'month', q.asOf || manilaToday());
+    const invoices = await run(`SELECT * FROM invoices WHERE payment_status <> 'Cancelled'
+      AND date_issued >= ? AND date_issued <= ? ORDER BY date_issued DESC, id DESC`, [b.from, b.to]);
+    let lineItems = [];
+    if (invoices.length) {
+      // Range constrained join: never duplicate invoice totals per item.
+      lineItems = await run(`SELECT ii.invoice_id, ii.product_service, ii.quantity, ii.amount_centavos
+        FROM invoice_items ii JOIN invoices inv ON inv.id = ii.invoice_id
+        WHERE inv.payment_status <> 'Cancelled' AND inv.date_issued >= ?
+          AND inv.date_issued <= ? ORDER BY ii.invoice_id, ii.position`, [b.from, b.to]);
+    }
+    let previous = 0;
+    if (b.range === 'quarter') {
+      const rows = await run(`SELECT COALESCE(SUM(amount_centavos),0) AS total
+        FROM invoices WHERE payment_status <> 'Cancelled'
+        AND date_issued >= ? AND date_issued <= ?`,
+        [b.previousQuarter.from,b.previousQuarter.to]);
+      previous = Number(rows[0]?.total || 0);
+    }
+    return aggregateDashboard(invoices,lineItems,b,previous);
+  },
+
   async analytics(q) {
     const today = q.asOf || manilaToday();
     const from = q.dateFrom || monthStart(today), to = q.dateTo || monthEnd(today);
