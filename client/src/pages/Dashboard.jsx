@@ -97,11 +97,15 @@ function QuarterView({d,open}) {
  <Tile title="Delivered" value={asNumber(q.delivery.delivered)} subtitle={`${q.delivery.pending} pending deliveries`}/>
  </div>
  <div className="grid gap-4 lg:grid-cols-2">
- <ChartBox title="Monthly sales this quarter"><MoneyBars items={d.monthly}/><p className="mt-2 text-xs text-success-ink">Best: {names(d.highlights.bestMonths)}</p></ChartBox>
+ <ChartBox title="Monthly sales this quarter"><div className="h-[260px]" role="img" aria-label="Three monthly sales bars with best month highlighted"><ResponsiveContainer><BarChart data={d.monthly}><CartesianGrid stroke="var(--chart-grid)" vertical={false}/><XAxis dataKey="label" {...axis}/><YAxis width={60} {...axis}/><Tooltip formatter={currency} contentStyle={tipStyle}/><Bar dataKey="value" name="Sales" maxBarSize={48} radius={[5,5,0,0]}>{d.monthly.map(m=><Cell key={m.key} fill={d.highlights.bestMonths.some(best=>best.key===m.key)?'var(--success)':'var(--chart-1)'}/>)}</Bar></BarChart></ResponsiveContainer></div><p className="mt-2 text-xs text-success-ink">Best: {names(d.highlights.bestMonths)}</p></ChartBox>
  <ChartBox title="Billed vs Collected"><div className="h-[260px]" role="img" aria-label="Monthly billed and collected comparison"><ResponsiveContainer><BarChart data={d.monthly}><CartesianGrid stroke="var(--chart-grid)" vertical={false}/><XAxis dataKey="label" {...axis}/><YAxis width={60} {...axis}/><Tooltip formatter={currency} contentStyle={tipStyle}/><Legend/><Bar dataKey="value" name="Billed" fill="var(--chart-1)" radius={[4,4,0,0]}/><Bar dataKey="collected" name="Collected" fill="var(--success)" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div></ChartBox>
  <ChartBox title="Top 5 clients"><MoneyBars items={d.clients} horizontal max={5}/></ChartBox>
  <ChartBox title="Top products & services"><MoneyBars items={d.productsBySales} horizontal max={5}/></ChartBox>
- <ChartBox title="Invoice status mix"><div className="grid grid-cols-3 gap-2">{Object.entries(q.status).map(([key,n])=><div key={key} className="rounded-lg bg-surface-2 p-3 text-center"><p className="text-xs capitalize text-fg-muted">{key}</p><p className="num mt-2 text-xl font-semibold">{n}</p></div>)}</div></ChartBox>
+ <ChartBox title="Invoice status mix"><div className="h-[230px]" role="img" aria-label="Quarterly paid unpaid and overdue invoice donut">
+ <ResponsiveContainer><PieChart><Pie data={Object.entries(q.status).filter(([,value])=>value>0).map(([name,value])=>({name,value}))} dataKey="value" nameKey="name" innerRadius={50} outerRadius={78}>
+ {Object.entries(q.status).filter(([,value])=>value>0).map(([name])=><Cell key={name} fill={name==='paid'?'var(--success)':name==='overdue'?'var(--danger)':'var(--chart-1)'}/>)}
+ </Pie><Tooltip contentStyle={tipStyle}/><Legend/></PieChart></ResponsiveContainer></div>
+ <div className="mt-2 flex flex-wrap gap-2">{Object.entries(q.status).map(([key,n])=><span key={key} className="rounded-lg bg-surface-2 px-3 py-1.5 text-xs capitalize text-fg-muted">{key}: {n}</span>)}</div></ChartBox>
  <ChartBox title="Delivery progress"><div className="grid grid-cols-2 gap-3"><Tile title="Delivered" value={q.delivery.delivered} tone="success" onClick={()=>open({dateFrom:d.period.from,dateTo:d.period.to,deliveryStatus:'Delivered'})}/><Tile title="Pending" value={q.delivery.pending} onClick={()=>open({dateFrom:d.period.from,dateTo:d.period.to,deliveryStatus:'Pending'})}/></div></ChartBox>
  </div>
  </div>;
