@@ -1,5 +1,6 @@
 // Browser-only AI cutout utilities. Images are never transmitted to the application API.
-// AI inference is implemented by Apache-2.0 @bg0/browser using MIT-licensed BiRefNet weights.
+// Uses the MIT-licensed ResizeBox browser engine and Apache-2.0 ORMBG model.
+// Inference is pinned to WebAssembly to avoid a known ONNX Runtime WebGPU GatherND shader failure.
 export const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 export const MAX_IMAGE_PIXELS = 25_000_000;
@@ -61,19 +62,50 @@ export async function validateTransparentPng(blob) {
   }
   return blob;
 }
+// The BiRefNet Lite model used by the previous WebGPU-first path can trigger
+// ONNX Runtime's GatherND computeSliceOffsets WGSL bug, producing hundreds
+// of validation errors without a usable mask. Force the CPU/WASM provider
+// rather than merely relying on model initialization fallback.
+// https://github.com/microsoft/onnxruntime/issues/32731
+export const BACKGROUND_REMOVAL_DEVICE = 'wasm';
+
+export function describeRemovalProgress(event = {}) {
+  const raw = Number(event.progress);
+  const percent = Number.isFinite(raw) && raw >= 0
+    ? Math.max(0, Math.min(100, Math.round(raw))) : null;
+  const phase = String(event.phase || '');
+  const messages = {
+    'loading-model': 'Loading local AI model…',
+    'downloading-model': 'Downloading AI model to your browser…',
+    initializing: 'Starting CPU compatibility engine…',
+    fallback: 'Switching to compatible CPU processing…',
+    ready: 'AI model ready…',
+    processing: 'Removing background and refining edges…',
+  };
+  return {message: event.message || messages[phase] || 'Removing background…', percent};
+}
+
 export async function cutOutBackground(file, report = () => {}) {
   await inspectImage(file);
-  report({message:'Loading the open-source AI model…',percent:null});
-  const {removeBackground}=await import('@bg0/browser');
-  const output=await removeBackground(file,{
-    quality:'quality',
-    onProgress:(event)=>{
-      const value=Number(event?.progress);
-      const percent=Number.isFinite(value)&&value>=0
-        ? Math.min(100,Math.max(0,Math.round(value<=1?value*100:value))) : null;
-      report({message:event?.message || 'Removing image background…',percent});
-    },
-  });
-  const png=await validateTransparentPng(output?.blob);
-  return {blob:png,engine:'BiRefNet',mode:'On-device AI'};
+  report({message:'Preparing reliable CPU compatibility mode…',percent:null});
+  try {
+    const {removeBackground} = await import('@resizebox/background-remover');
+    const output = await removeBackground(file,{
+      device: BACKGROUND_REMOVAL_DEVICE,
+      background: 'transparent',
+      onProgress: (event) => report(describeRemovalProgress(event)),
+    });
+    // Reject corrupted, opaque, or empty results instead of offering an invalid download.
+    const png = await validateTransparentPng(output?.blob);
+    return {blob:png,engine:'ORMBG',mode:'Local WebAssembly (CPU)'};
+  } catch (error) {
+    const message = String(error?.message || '');
+    if (/fetch|download|network|model.*load/i.test(message)) {
+      throw new Error('Could not load the local AI model. Check your connection and try again.');
+    }
+    if (/memory|allocation|wasm|out.of.memory/i.test(message)) {
+      throw new Error('Your browser ran out of memory while processing. Close unused tabs or try a smaller image.');
+    }
+    throw new Error(message || 'Background removal could not finish. Try another image.');
+  }
 }
