@@ -68,7 +68,7 @@ export const BACKGROUND_REMOVAL_DEVICE = 'wasm';
 
 export function describeRemovalProgress(event = {}) {
   return {
-    message: String(event.message || 'Processing with BiRefNet General Lite…'),
+    message: String(event.message || 'Removing background…'),
     percent: Number.isFinite(event.percent) && event.percent >= 0 && event.percent <= 100
       ? event.percent : null,
   };
@@ -76,7 +76,7 @@ export function describeRemovalProgress(event = {}) {
 
 export async function cutOutBackground(file, report = () => {}) {
   await inspectImage(file);
-  report({message:'Preparing BiRefNet General Lite…',percent:null});
+  report({message:'Getting ready…',percent:null});
   try {
     const {runBiRefNet} = await import('./birefnetLite.js');
     const blob = await runBiRefNet(file, state => report(describeRemovalProgress(state)));
@@ -85,11 +85,11 @@ export async function cutOutBackground(file, report = () => {}) {
   } catch (error) {
     const message = String(error?.message || '');
     if (/fetch|download|network|failed to load model/i.test(message)) {
-      throw new Error('BiRefNet model download failed. Check your internet connection or browser storage, then retry.');
+      throw new Error('Could not load the photo tool. Check your connection and try again.');
     }
     if (/memory|alloc|wasm|out.of.memory/i.test(message)) {
-      throw new Error('Your browser lacks enough memory for BiRefNet. Close unused tabs or use a device with more RAM.');
+      throw new Error('Not enough memory to finish. Try a smaller photo or close other tabs.');
     }
-    throw new Error(message || 'BiRefNet background removal failed. Try another image.');
+    throw new Error(message || 'Could not remove the background. Please try another photo.');
   }
 }
