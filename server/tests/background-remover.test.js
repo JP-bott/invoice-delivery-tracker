@@ -14,8 +14,8 @@ describe('image background remover input and output safety', () => {
   });
   it('locks inference to WASM so the broken WebGPU shader is not invoked', () => {
     expect(BACKGROUND_REMOVAL_DEVICE).toBe('wasm');
-    expect(describeRemovalProgress({message:'Running BiRefNet',percent:35})).toEqual({
-      message:'Running BiRefNet',percent:35,
+    expect(describeRemovalProgress({message:'Removing background…',percent:35})).toEqual({
+      message:'Removing background…',percent:35,
     });
     expect(describeRemovalProgress({message:'Segmenting image'}).percent).toBeNull();
     expect(describeRemovalProgress({percent:180}).percent).toBeNull();

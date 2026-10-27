@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Download, ImagePlus, LoaderCircle, LockKeyhole, RefreshCw, Scissors, ShieldCheck, Sparkles, UploadCloud, X } from 'lucide-react';
+import { CheckCircle2, Download, ImagePlus, LoaderCircle, LockKeyhole, RefreshCw, Scissors, UploadCloud, X } from 'lucide-react';
 import { PageHeader } from '../components/ui.jsx';
 import Modal from '../components/Modal.jsx';
 import BackgroundComparison from '../components/background/BackgroundComparison.jsx';
@@ -57,7 +57,7 @@ export default function BackgroundRemover() {
   const remove=async()=>{
     if(!file||busy||checking)return;
     const id=++generation.current;
-    setBusy(true);setError('');discardOutput();setDialog(true);setProgress({message:'Starting AI background removal…',percent:null});
+    setBusy(true);setError('');discardOutput();setDialog(true);setProgress({message:'Getting ready…',percent:null});
     try {
       const converted=await cutOutBackground(file,(state)=>{
         if(active.current&&id===generation.current)setProgress(state);
@@ -67,10 +67,10 @@ export default function BackgroundRemover() {
       afterRef.current=url;downloadUrl.current=url;setAfterUrl(url);
       setResult({name:transparentFileName(file.name),size:converted.blob.size,engine:converted.engine});
       setCompare(50);setSuccessVisible(true);
-      setProgress({message:'Background successfully removed.',percent:null});
+      setProgress({message:'Done!',percent:null});
       successTimer.current=setTimeout(()=>{if(active.current&&id===generation.current)setSuccessVisible(false);},1250);
     } catch(e) {
-      if(active.current&&id===generation.current)setError(e?.message||'Unable to remove the background. Try another image.');
+      if(active.current&&id===generation.current)setError(e?.message||'Could not remove the background. Please try again.');
     } finally {if(active.current&&id===generation.current)setBusy(false);}
   };
   const download=()=>{
@@ -80,13 +80,11 @@ export default function BackgroundRemover() {
     document.body.appendChild(link);link.click();link.remove();
   };
   const closeWorkspace=()=>{if(!busy)setDialog(false);};
-  return <div className="mx-auto max-w-6xl space-y-5">
-    <PageHeader title="Image Background Remover" description="Remove backgrounds with open-source AI. Your photos stay in your browser. BiRefNet General Lite produces a transparent PNG ready to preview and download." actions={file&&<button className="btn btn-secondary" disabled={busy||checking} onClick={reset}><RefreshCw size={15}/>New image</button>}/>
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
-      <div className="space-y-5">
+  return <div className="mx-auto max-w-3xl space-y-5">
+    <PageHeader title="Image Background Remover" description="Remove a photo background in a few clicks." actions={file&&<button className="btn btn-secondary" disabled={busy||checking} onClick={reset}><RefreshCw size={15}/>New image</button>}/>
         <section className="card card-pad space-y-4" aria-label="Image upload and background removal">
           <div className="flex items-center justify-between gap-3">
-            <div><p className="eyebrow">IMAGE WORKSPACE</p><h2 className="mt-1 text-base font-semibold text-fg">Upload your image</h2></div>
+            <div><h2 className="text-base font-semibold text-fg">Choose a photo</h2></div>
             <span className="rounded-full border border-line bg-surface-2 px-3 py-1 text-xs text-fg-muted">PNG · JPG · WebP</span>
           </div>
           <input ref={picker} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label="Choose image" disabled={busy||checking} onChange={e=>{select(e.target.files?.[0]);e.target.value='';}}/>
@@ -98,9 +96,9 @@ export default function BackgroundRemover() {
             onDrop={e=>{e.preventDefault();setDrag(false);select(e.dataTransfer?.files?.[0]);}}
             className={`cursor-pointer rounded-2xl border-2 border-dashed px-5 py-9 text-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand ${drag?'border-brand bg-brand-soft':'border-line-strong bg-surface-2/40 hover:border-brand/50 hover:bg-surface-2'}`}>
             <span className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl border border-line bg-surface text-brand"><UploadCloud size={27}/></span>
-            <p className="font-semibold text-fg">Drop an image or click to browse</p>
-            <p className="mt-1 text-sm text-fg-muted">You can also paste a copied image with Ctrl+V</p>
-            <p className="mt-3 text-xs text-fg-subtle">Up to 25 MB and 25 megapixels</p>
+            <p className="font-semibold text-fg">Drop a photo here or click to upload</p>
+            <p className="mt-1 text-sm text-fg-muted">You can also paste a photo (Ctrl+V)</p>
+            <p className="mt-3 text-xs text-fg-subtle">Maximum size: 25 MB</p>
           </div>
           {file&&<div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2/50 p-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand-ink"><ImagePlus size={19}/></span>
@@ -110,25 +108,22 @@ export default function BackgroundRemover() {
           {error&&<p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-ink">{error}</p>}
           {(busy||checking)&&<p className="flex items-center gap-2 text-xs text-fg-muted" role="status" aria-live="polite">
             <LoaderCircle size={15} className="animate-spin text-brand" aria-hidden="true" />
-            {checking ? 'Validating image…' : progress.message || 'Processing your image…'}
+            {checking ? 'Checking photo…' : progress.message || 'Working on your photo…'}
           </p>}
           <button type="button" className="btn btn-primary !h-11 w-full justify-center" disabled={!file||busy||checking} onClick={remove}>
             {busy?<LoaderCircle className="animate-spin" size={17}/>:<Scissors size={17}/>}
-            {busy?'Removing background…':'Remove background'}
+            {busy?'Working on your photo…':'Remove background'}
             {!busy&&<Sparkles size={15}/>}
           </button>
         </section>
-      </div>
-      <aside className="space-y-4">
-        <div className="card card-pad"><div className="flex items-center gap-2"><ShieldCheck size={18} className="text-success-ink"/><h3 className="font-semibold text-fg">Private processing</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Images are processed on your device. No image is uploaded to the app server or stored in the invoice database.</p><p className="mt-3 flex items-center gap-2 text-xs text-fg-subtle"><LockKeyhole size={14}/>Nothing saved after this session</p></div>
-        <div className="card card-pad"><div className="flex items-center gap-2"><Sparkles size={18} className="text-brand"/><h3 className="font-semibold text-fg">Open-source AI</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Powered by MIT-licensed BiRefNet General Lite model weights and Apache-2.0 Transformers.js running locally in WebAssembly. The model downloads on first use and is cached in your browser. CPU inference may require substantial memory and time.</p><p className="mt-3 text-xs leading-relaxed text-fg-subtle">The output is a transparent PNG at the original image dimensions where supported. Fine hair or translucent objects may still have imperfect edges.</p></div>
-      </aside>
-    </div>
-    {dialog && <Modal title="Background removal" description={busy ? "BiRefNet is processing your image on your device." : result ? "Compare your image and download the transparent PNG." : "Review the processing result."}
+    <p className="flex items-center justify-center gap-2 text-xs text-fg-muted">
+      <LockKeyhole size={14} aria-hidden="true"/> Your photo stays private and is not saved.
+    </p>
+    {dialog && <Modal title="Remove background" description={busy ? "Working on your photo…" : result ? "Compare and download your photo." : "Try again when ready."}
       width="max-w-4xl" onClose={closeWorkspace} dismissOnBackdrop={!busy}
       footer={<>
         {!busy && <button type="button" className="btn btn-secondary" onClick={closeWorkspace}>Close</button>}
-        {result && !busy && <button type="button" data-autofocus className="btn btn-primary" onClick={download}><Download size={16}/>Download transparent PNG</button>}
+        {result && !busy && <button type="button" data-autofocus className="btn btn-primary" onClick={download}><Download size={16}/>Download image</button>}
       </>}>
       <BackgroundComparison originalUrl={beforeUrl} processedUrl={afterUrl} dimensions={dimensions}
         compare={compare} onCompare={setCompare} processing={busy} checking={false} progress={progress} succeeded={successVisible}/>
@@ -136,13 +131,13 @@ export default function BackgroundRemover() {
       {result && <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/50 p-3">
         <span className="min-w-0">
           <span className="block text-sm font-semibold text-fg">{result.name}</span>
-          <span className="block text-xs text-fg-muted">{readableSize(result.size)} · Transparent PNG</span>
+          <span className="block text-xs text-fg-muted">{readableSize(result.size)} · PNG image</span>
         </span>
         <CheckCircle2 className="shrink-0 text-success-ink" size={22} aria-label="Completed"/>
       </div>}
     </Modal>}
     {result && !dialog && <button type="button" onClick={()=>setDialog(true)} className="fixed bottom-5 right-4 z-40 flex items-center gap-3 rounded-xl border border-success/30 bg-surface px-4 py-3 shadow-pop sm:right-6">
-      <CheckCircle2 className="text-success-ink" size={20}/><span className="text-sm font-semibold text-fg">View completed image</span><Download size={16} className="text-brand-ink"/>
+      <CheckCircle2 className="text-success-ink" size={20}/><span className="text-sm font-semibold text-fg">View your image</span><Download size={16} className="text-brand-ink"/>
     </button>}
   </div>;
 }

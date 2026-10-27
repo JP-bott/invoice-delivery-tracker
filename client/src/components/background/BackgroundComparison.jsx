@@ -115,16 +115,16 @@ export default function BackgroundComparison({
               <div className="br-processing-orbit br-success-orbit" aria-hidden="true">
                 <CheckCircle2 className="br-success-check" size={56} strokeWidth={1.9}/>
               </div>
-              <p className="br-processing-title">Background removed!</p>
-              <p className="br-processing-message">Your transparent PNG is ready. Opening the comparison…</p>
+              <p className="br-processing-title">Done!</p>
+              <p className="br-processing-message">Your photo is ready.</p>
             </> : <>
               <div className="br-processing-orbit" aria-hidden="true">
                 <span className="br-processing-halo"/>
                 <LoaderCircle className="br-processing-spinner" size={48} strokeWidth={2.2}/>
                 <Sparkles className="br-processing-center" size={19}/>
               </div>
-              <p className="br-processing-title">{checking ? 'Checking your image' : 'AI is removing the background'}</p>
-              <p className="br-processing-message">{checking ? 'Validating the image format and dimensions…' : progress?.message || 'Preparing the AI model…'}</p>
+              <p className="br-processing-title">{checking ? 'Checking photo…' : 'Removing background…'}</p>
+              <p className="br-processing-message">{checking ? 'Almost ready…' : progress?.message || 'Getting ready…'}</p>
               <div className="br-progress-track" aria-hidden="true">
                 {processing && Number.isFinite(progress?.percent)
                   ? <div className="br-progress-known" style={{width:`${progress.percent}%`}}/>
@@ -132,7 +132,7 @@ export default function BackgroundComparison({
                 <div className="br-progress-active" />
               </div>
               <p className="br-processing-note">
-                {processing ? 'This may take a while on CPU. Keep this page open.' : 'Preparing your photo…'}
+                {processing ? 'This may take a little while.' : 'Getting ready…'}
               </p>
             </>}
           </div>
@@ -141,7 +141,7 @@ export default function BackgroundComparison({
     </div>
     {hasResult && <p className="flex items-center justify-center gap-2 text-xs text-fg-muted">
       <MoveHorizontal size={15} aria-hidden="true"/>
-      Drag the vertical divider directly on the image, or use the arrow keys.
+      Drag the line to compare.
     </p>}
   </div>;
 }

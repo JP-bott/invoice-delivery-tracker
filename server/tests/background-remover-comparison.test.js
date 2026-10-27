@@ -28,7 +28,7 @@ describe('background remover comparison and loading experience', () => {
     expect(comparison).toContain('br-processing-spinner');
     expect(comparison).toContain('br-progress-active');
     expect(comparison).toContain('Number.isFinite(progress?.percent)');
-    expect(comparison).toContain('This may take a while on CPU.');
+    expect(comparison).toContain('This may take a little while.');
     expect(page).toContain('processing={busy}');
     expect(comparison).toContain('br-success-check');
     expect(page).toContain('succeeded={successVisible}');
