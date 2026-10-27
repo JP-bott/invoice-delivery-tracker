@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PanelLeftClose, PanelLeftOpen, Receipt, ReceiptText, Settings as SettingsIcon, FileCog, X } from 'lucide-react';
+import { LayoutDashboard, PanelLeftClose, PanelLeftOpen, Receipt, ReceiptText, Settings as SettingsIcon, FileCog, ImageMinus, X } from 'lucide-react';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/invoices', label: 'Invoices', icon: Receipt },
   { to: '/document-converter', label: 'Document Converter', icon: FileCog },
+  { to: '/background-remover', label: 'Background Remover', icon: ImageMinus },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
