@@ -23,6 +23,15 @@ export function sequenceOf(invoiceNo, prefix) {
   return Number.isSafeInteger(n) ? n : null;
 }
 
+// Determine the actual document title using the persisted SI/SVI number first.
+// A new invoice may have no assigned number yet, so use the selected form type.
+// Unknown legacy numbers keep the historical service-invoice heading.
+export function invoiceDocumentTitle(invoice = {}) {
+  const stored = splitInvoiceNo(invoice.invoice_no || '').prefix;
+  const type = (stored === 'SI' || stored === 'SVI') ? stored : String(invoice.invoice_prefix || '').trim().toUpperCase();
+  return type === 'SI' ? 'Sales Invoice' : 'Service Invoice';
+}
+
 // What the invoice sheet shows in its number box: "No. 0006" (the type stays in the stored value only).
 export function sheetInvoiceNo(invoiceNo) {
   const { number } = splitInvoiceNo(invoiceNo);
