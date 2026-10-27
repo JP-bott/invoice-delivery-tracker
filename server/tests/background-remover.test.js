@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { imageExtension, transparentFileName, validateImageSelection, validateTransparentPng, MAX_IMAGE_BYTES } from '../../client/src/utils/backgroundRemoval.js';
+import { imageExtension, transparentFileName, validateImageSelection, validateTransparentPng, describeRemovalProgress, BACKGROUND_REMOVAL_DEVICE, MAX_IMAGE_BYTES } from '../../client/src/utils/backgroundRemoval.js';
 
 describe('image background remover input and output safety', () => {
   it('accepts PNG JPEG and WebP names', () => {
@@ -11,6 +11,13 @@ describe('image background remover input and output safety', () => {
     expect(() => validateImageSelection(new File(['test'],'a.svg'))).toThrow(/Only PNG/);
     expect(() => validateImageSelection(new File([], 'a.png'))).toThrow(/empty/);
     expect(() => validateImageSelection({name:'a.png',size:MAX_IMAGE_BYTES+1,slice(){},arrayBuffer(){}})).toThrow(/25 MB/);
+  });
+  it('locks inference to WASM so the broken WebGPU shader is not invoked', () => {
+    expect(BACKGROUND_REMOVAL_DEVICE).toBe('wasm');
+    expect(describeRemovalProgress({phase:'processing',progress:35})).toEqual({
+      message:'Removing background and refining edges…',percent:35,
+    });
+    expect(describeRemovalProgress({phase:'downloading-model',progress:180}).percent).toBe(100);
   });
   it('normalizes download filenames', () => {
     expect(transparentFileName('photo.2026.jpg')).toBe('photo.2026_no_background.png');
