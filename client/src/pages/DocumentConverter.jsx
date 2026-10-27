@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, CheckCircle2, CloudUpload, Download, File, FileImage, FileSpreadsheet, FileText, LoaderCircle, LockKeyhole, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { PageHeader } from '../components/ui.jsx';
+import Modal from '../components/Modal.jsx';
 import { ACCEPT, FILE_TYPES, MAX_FILE_BYTES, TARGET_LABELS, assertSourceFile, fileKind, outputName, outputOptions } from '../utils/documentConverterValidation.js';
 
 const icons={pdf:FileText,docx:FileText,xlsx:FileSpreadsheet,png:FileImage,jpg:FileImage};
@@ -18,6 +19,7 @@ export default function DocumentConverter(){
   const [dragging,setDragging]=useState(false),[busy,setBusy]=useState(false);
   const [error,setError]=useState(''),[message,setMessage]=useState('');
   const [result,setResult]=useState(null);
+  const [downloadOpen,setDownloadOpen]=useState(false);
   const input=useRef(null),url=useRef(null);
   const revoke=()=>{if(url.current){URL.revokeObjectURL(url.current);url.current=null;}};
   useEffect(()=>()=>revoke(),[]);
@@ -25,7 +27,7 @@ export default function DocumentConverter(){
     if(!selected)return;
     try {
       const kind=assertSourceFile(selected);
-      revoke();setResult(null);setFile(selected);setTarget(FILE_TYPES[kind].outputs[0]);
+      revoke();setResult(null);setDownloadOpen(false);setFile(selected);setTarget(FILE_TYPES[kind].outputs[0]);
       setError('');setMessage('');
     }catch(e){setError(e.message);}
   },[]);
@@ -38,10 +40,10 @@ export default function DocumentConverter(){
     document.addEventListener('paste',paste);
     return ()=>document.removeEventListener('paste',paste);
   },[pick,busy]);
-  const clear=()=>{if(busy)return;revoke();setResult(null);setFile(null);setTarget('');setError('');setMessage('');if(input.current)input.current.value='';};
+  const clear=()=>{if(busy)return;revoke();setResult(null);setDownloadOpen(false);setFile(null);setTarget('');setError('');setMessage('');if(input.current)input.current.value='';};
   const run=async()=>{
     if(!file || !target || busy)return;
-    setBusy(true);setError('');setMessage('Initializing conversion…');revoke();setResult(null);
+    setBusy(true);setError('');setMessage('Initializing conversion…');revoke();setResult(null);setDownloadOpen(false);
     try{
       const {convertDocument}=await import('../utils/documentConverterEngine.js');
       const finished=await convertDocument(file,target,setMessage);
@@ -49,6 +51,7 @@ export default function DocumentConverter(){
       const downloadName=outputName(file,finished.extension);
       url.current=URL.createObjectURL(blob);
       setResult({name:downloadName,size:blob.size,detail:finished.detail});
+      setDownloadOpen(true);
       setMessage('Conversion completed. Your download is ready.');
     }catch(e){setError(e?.message||'Conversion failed. Please check your file and retry.');setMessage('');}
     finally{setBusy(false);}
@@ -85,7 +88,7 @@ export default function DocumentConverter(){
           </div>}
           <div className="border-t border-line pt-5">
             <p className="eyebrow">STEP 02</p><h2 className="mt-1 text-base font-semibold text-fg">Convert to</h2>
-            {file?<div className="mt-3 grid gap-2 sm:grid-cols-2">{options.map(output=>{const Icon=icons[output]||File;return <button key={output} type="button" disabled={busy} aria-pressed={target===output} onClick={()=>{setTarget(output);setResult(null);revoke();setError('');}}
+            {file?<div className="mt-3 grid gap-2 sm:grid-cols-2">{options.map(output=>{const Icon=icons[output]||File;return <button key={output} type="button" disabled={busy} aria-pressed={target===output} onClick={()=>{setTarget(output);setResult(null);setDownloadOpen(false);revoke();setError('');}}
               className={`flex items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors ${target===output?'border-brand bg-brand-soft ring-1 ring-brand/25':'border-line bg-surface hover:bg-surface-2'}`}>
               <span className="flex items-center gap-2.5"><Icon size={19} className={target===output?'text-brand-ink':'text-fg-muted'}/><span className="text-sm font-medium text-fg">{TARGET_LABELS[output]}</span></span>{target===output&&<CheckCircle2 size={16} className="text-brand-ink"/>}
             </button>})}</div>:<p className="mt-2 text-sm text-fg-muted">Select a supported document to see conversion formats.</p>}
@@ -95,11 +98,7 @@ export default function DocumentConverter(){
           {message&&<p aria-live="polite" className="text-sm text-fg-muted">{message}</p>}
           <button type="button" onClick={run} disabled={!file||!target||busy} className="btn btn-primary w-full justify-center !h-11">{busy?<LoaderCircle size={17} className="animate-spin"/>:<RefreshCw size={17}/>} {busy?'Converting file…':'Convert document'} {!busy&&<ArrowRight size={16}/>}</button>
         </section>
-        {result&&<section className="rounded-xl border border-success/30 bg-success-soft/50 p-4" aria-live="polite">
-          <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 shrink-0 text-success-ink" size={20}/>
-          <div className="min-w-0 flex-1"><h3 className="font-semibold text-fg">Document ready</h3><p className="mt-1 break-words text-sm text-fg">{result.name}</p><p className="mt-1 text-xs text-fg-muted">{result.detail} · {fileSize(result.size)}</p></div></div>
-          <button type="button" onClick={download} className="btn btn-primary mt-4 w-full justify-center"><Download size={16}/>Download converted file</button>
-        </section>}
+
       </div>
       <aside className="space-y-4">
         <div className="card card-pad"><div className="flex items-center gap-2"><LockKeyhole size={18} className="text-success-ink"/><h3 className="font-semibold text-fg">Private by design</h3></div>
@@ -114,5 +113,60 @@ export default function DocumentConverter(){
         </div>
       </aside>
     </div>
+    {/* The modal is rendered in a portal above the page immediately after success.
+        Closing it does not discard the in-memory download. */}
+    {result && downloadOpen && (
+      <Modal
+        title="Your document is ready"
+        description="Conversion completed successfully. Download the file below."
+        width="max-w-md"
+        onClose={() => setDownloadOpen(false)}
+        footer={<>
+          <button type="button" className="btn btn-secondary" onClick={() => setDownloadOpen(false)}>
+            Close
+          </button>
+          <button type="button" data-autofocus className="btn btn-primary" onClick={download}>
+            <Download size={16} aria-hidden="true" />
+            Download file
+          </button>
+        </>}
+      >
+        <div className="flex flex-col items-center gap-3 py-2 text-center">
+          <div className="grid h-16 w-16 place-items-center rounded-full border border-success/25 bg-success-soft text-success-ink">
+            <CheckCircle2 size={33} strokeWidth={1.8} aria-hidden="true" />
+          </div>
+          <p className="text-base font-semibold text-fg">Conversion successful</p>
+          <p className="text-sm text-fg-muted">Your converted file is ready to save to your device.</p>
+        </div>
+        <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2/60 p-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand-ink" aria-hidden="true">
+            {result.name.toLowerCase().endsWith('.zip') ? <File size={21} /> : result.name.toLowerCase().endsWith('.pdf') || result.name.toLowerCase().endsWith('.docx') ? <FileText size={21} /> : <FileImage size={21} />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="break-all text-sm font-semibold text-fg">{result.name}</p>
+            <p className="mt-1 text-xs text-fg-muted">{result.detail} · {fileSize(result.size)}</p>
+          </div>
+        </div>
+        <p className="flex items-center justify-center gap-2 text-xs text-fg-subtle">
+          <ShieldCheck size={15} aria-hidden="true" />
+          This download is available only during the current browser session.
+        </p>
+      </Modal>
+    )}
+    {/* Reopen the download from anywhere on the page after dismissing the popup. */}
+    {result && !downloadOpen && (
+      <button type="button" onClick={() => setDownloadOpen(true)}
+        className="fixed bottom-5 right-4 z-40 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-xl border border-success/30 bg-surface px-4 py-3 text-left shadow-pop transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-brand sm:bottom-6 sm:right-6"
+        aria-label="Open converted file download">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-success-soft text-success-ink">
+          <CheckCircle2 size={20} aria-hidden="true" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-fg">Document ready</span>
+          <span className="block text-xs text-fg-muted">Tap to download</span>
+        </span>
+        <Download size={18} className="shrink-0 text-brand-ink" aria-hidden="true" />
+      </button>
+    )}
   </div>;
 }
