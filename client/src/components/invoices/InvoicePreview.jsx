@@ -3,7 +3,7 @@ import { Printer } from 'lucide-react';
 import Modal from '../Modal.jsx';
 import { computeTotals } from '../../../../shared/pricing.js';
 import { money, sheetPricing } from '../../utils/sheetPricing.js';
-import { sheetInvoiceNo } from '../../utils/invoiceNo.js';
+import { sheetInvoiceNo, invoiceDocumentTitle } from '../../utils/invoiceNo.js';
 import './invoice-sheet.css';
 
 const ROWS = 14; // fits one A5 page once the sheet is rendered with real text
@@ -18,10 +18,12 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
   const t = computeTotals(total, type, whtRate);
   const vatable = type === 'vatable';
   const invoiceNo = invoice.invoice_no || ''; // stored value ("SI - 0006"); the sheet shows only "No. 0006"
+  const documentTitle = invoiceDocumentTitle(invoice);
+  const isSalesInvoice = documentTitle === 'Sales Invoice';
   if (invoice.remarks) rows.push({ q: '', d: invoice.remarks, u: '', a: '', sub: true });
   while (rows.length < ROWS) rows.push({ q: '', d: '', u: '', a: '' });
   return (
-    <div className="inv-sheet" role="document" aria-label={`Service invoice ${invoiceNo}`}>
+    <div className="inv-sheet" role="document" aria-label={`${documentTitle} ${invoiceNo}`}>
       <header>
         <h1>QUANDATICS INC.</h1>
         <p>8th Floor Unit-O Cyber One Building 11 Eastwood Avenue, Eastwood City Cyberpark</p>
@@ -29,7 +31,7 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
         <p>VAT Reg. No. 010-241-281-00000</p>
       </header>
       <div className="title-row">
-        <div className="t">SERVICE <b>INVOICE</b></div>
+        <div className="t">{isSalesInvoice ? 'SALES' : 'SERVICE'} <b>INVOICE</b></div>
         <div className="no"><span>{sheetInvoiceNo(invoiceNo)}</span></div>
       </div>
       <table className="info"><tbody>
@@ -39,7 +41,7 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
         <tr><td colSpan="3"><div className="cell">TIN: <span className="v">{invoice.client_tin || ''}</span></div></td></tr>
       </tbody></table>
       <table className="items">
-        <thead><tr><th className="qty">QTY.</th><th>NATURE OF SERVICE</th><th className="unit">UNIT<br />COST</th><th className="amt">AMOUNT</th></tr></thead>
+        <thead><tr><th className="qty">QTY.</th><th>{isSalesInvoice ? 'NATURE OF GOODS' : 'NATURE OF SERVICE'}</th><th className="unit">UNIT<br />COST</th><th className="amt">AMOUNT</th></tr></thead>
         <tbody>{rows.map((r, i) => <tr key={i}><td className="qty">{r.q}</td><td className={`d ${r.sub ? 'sub' : ''}`}>{r.d}</td><td className="unit">{r.u}</td><td className="amt">{r.a}</td></tr>)}</tbody>
       </table>
       <table className="totals"><tbody>
@@ -64,6 +66,7 @@ export default function InvoicePreview({ invoice, onClose }) {
   const wrap = useRef(null);
   const whtRate = useMemo(() => parseFloat(wht) || 0, [wht]);
   const totalOnly = sheetPricing(invoice).totalOnly;
+  const documentTitle = invoiceDocumentTitle(invoice);
 
   // Scale the A5 sheet down on narrow screens instead of scrolling sideways.
   useEffect(() => {
@@ -86,7 +89,7 @@ export default function InvoicePreview({ invoice, onClose }) {
   };
 
   return (
-    <Modal title="Invoice preview" description="A print-ready view of this invoice. Nothing is saved until you add it." onClose={onClose} width="max-w-[calc(148mm+2.5rem)]" printKeep
+    <Modal title={`${documentTitle} preview`} description="A print-ready view of this invoice. Nothing is saved until you add it." onClose={onClose} width="max-w-[calc(148mm+2.5rem)]" printKeep
       footer={<>
         <label className="flex items-center gap-1.5 text-xs text-fg-muted">Sale type
           <select className="input !h-8 !w-auto !text-xs" value={type} onChange={(e) => setType(e.target.value)}><option value="vatable">VATable (12%)</option><option value="exempt">VAT-Exempt</option><option value="zero">Zero Rated</option></select>
