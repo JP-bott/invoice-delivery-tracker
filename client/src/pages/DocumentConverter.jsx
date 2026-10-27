@@ -5,12 +5,12 @@ import { ACCEPT, FILE_TYPES, MAX_FILE_BYTES, TARGET_LABELS, assertSourceFile, fi
 
 const icons={pdf:FileText,docx:FileText,xlsx:FileSpreadsheet,png:FileImage,jpg:FileImage};
 const notes={
- 'pdf:docx':'Extracts selectable PDF text into an editable Word document. Original visual layout and graphics may differ; scanned pages require OCR.',
+ 'pdf:docx':'Layout-first conversion: each PDF page is embedded as a full-page image in Word, preserving visible text, tables, and graphics. The output is not text-editable. Fonts and display may still vary slightly by Word/WPS.',
  'pdf:png':'Renders PDF pages as PNG images. Multiple pages download together in a ZIP archive.',
  'pdf:jpg':'Renders PDF pages as JPEG images. Multiple pages download together in a ZIP archive.',
- 'xlsx:pdf':'Renders worksheet cell data as formatted PDF tables. Charts, pivot interactivity, embedded objects and complex Excel layouts are not preserved.',
- 'docx:pdf':'Converts Word to a visual PDF. Layout can differ from Microsoft Word, and text in the resulting PDF is rendered as images.',
- 'docx:png':'Renders Word pages as PNG images. Multiple pages download together as a ZIP archive.',
+ 'xlsx:pdf':'IMPORTANT: Exact layout preservation is unavailable for Excel-to-PDF in this browser converter. It rebuilds cell data as PDF tables, so print areas, charts, merges, widths and page breaks may differ. Do not use for documents requiring identical formatting.',
+ 'docx:pdf':'Visually renders Word pages into PDF. Embedded fonts, tables, headers, page breaks and spacing may differ from Microsoft Word. Use Word export or a dedicated Office renderer when identical pagination is required.',
+ 'docx:png':'Captures visually rendered Word pages as PNG images; font substitution or different browser pagination can affect layout. Multiple pages download as a ZIP.'
 };
 const fileSize=n=>n>=1048576?`${(n/1048576).toFixed(2)} MB`:`${(n/1024).toFixed(1)} KB`;
 export default function DocumentConverter(){
@@ -110,7 +110,7 @@ export default function DocumentConverter(){
           <p>Excel (XLSX) <span className="text-fg-subtle">→</span> PDF</p>
           <p>Word (DOCX) <span className="text-fg-subtle">→</span> PDF, PNG</p>
           <p>PDF <span className="text-fg-subtle">→</span> Word (DOCX), PNG, JPG</p></div>
-          <p className="mt-4 text-xs leading-relaxed text-fg-subtle">Old Office .doc/.xls files, image-only PDF-to-Word OCR, password-protected files, and exact reconstruction of complex layouts are not supported.</p>
+          <p className="mt-4 text-xs leading-relaxed text-fg-subtle">Old Office .doc/.xls files, password-protected files, and guaranteed pixel-perfect Office conversion are not supported. PDF-to-Word is layout-first and image-based.</p>
         </div>
       </aside>
     </div>
