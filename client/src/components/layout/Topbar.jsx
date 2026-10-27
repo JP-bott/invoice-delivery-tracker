@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Menu, Moon, Plus, Search, Sun, X } from 'lucide-react';
 import { today } from '../../utils/dates.js';
 
-const TITLES = { '/': 'Dashboard', '/invoices': 'Invoices', '/document-converter': 'Document Converter', '/settings': 'Settings' };
+const TITLES = { '/': 'Dashboard', '/invoices': 'Invoices', '/document-converter': 'Document Converter', '/background-remover': 'Background Remover', '/settings': 'Settings' };
 
 // Today's date in Asia/Manila (the zone every "as of today" figure uses), split for the date tile.
 const dateParts = (iso) => {
