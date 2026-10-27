@@ -25,22 +25,22 @@ export function modelDownloadProgress(event) {
     const value = Number(event?.progress);
     const percent = Number.isFinite(value) && value >= 0 && value <= 100
       ? Math.round(value) : null;
-    return {message: 'Downloading BiRefNet General Lite model…', percent};
+    return {message: 'Downloading photo tools…', percent};
   }
-  if (status === 'initiate') return {message: 'Locating BiRefNet model assets…', percent:null};
-  if (status === 'done') return {message: 'Model file downloaded. Initializing…', percent:null};
+  if (status === 'initiate') return {message: 'Getting things ready…', percent:null};
+  if (status === 'done') return {message: 'Almost ready…', percent:null};
   return null;
 }
 
 export async function getBiRefNetEngine(report = () => {}) {
   if (loadedEngine) {
-    report({message: 'BiRefNet model is ready (reused from memory).', percent:null});
+    report({message: 'Ready to go…', percent:null});
     return loadedEngine;
   }
   progressListeners.add(report);
   if (!loadingPromise) {
     loadingPromise = (async () => {
-      announce('Loading Transformers.js inference runtime…');
+      announce('Getting things ready…');
       const {AutoModel, AutoProcessor, env} = await import('@huggingface/transformers');
       env.allowRemoteModels = true;
       env.allowLocalModels = false;
@@ -51,7 +51,7 @@ export async function getBiRefNetEngine(report = () => {}) {
       const processor = await AutoProcessor.from_pretrained(BIREFNET_MODEL_ID, {
         revision: BIREFNET_REVISION,
       });
-      announce('Preparing BiRefNet model (first download about 183 MB)…');
+      announce('Getting ready for your first photo…');
       const model = await AutoModel.from_pretrained(BIREFNET_MODEL_ID, {
         revision: BIREFNET_REVISION,
         device: BIREFNET_DEVICE, dtype: BIREFNET_DTYPE,
@@ -61,7 +61,7 @@ export async function getBiRefNetEngine(report = () => {}) {
         },
       });
       loadedEngine = {model,processor};
-      announce('BiRefNet model initialized.');
+      announce('Ready to go…');
       return loadedEngine;
     })().catch(error => {
       // Permit retry after network, storage, or model-initialization failures.
@@ -131,19 +131,19 @@ export async function composeOriginalSizePng(originalFile, matte) {
 
 export async function runBiRefNet(file, report = () => {}) {
   const {model,processor} = await getBiRefNetEngine(report);
-  report({message:'Preparing image for BiRefNet General Lite (512×512)…',percent:null});
+  report({message:'Preparing your photo…',percent:null});
   const {RawImage} = await import('@huggingface/transformers');
   const url=URL.createObjectURL(file);
   let image;
   try {image=await RawImage.read(url);}
   finally {URL.revokeObjectURL(url);}
   const {pixel_values} = await processor(image);
-  report({message:'Running BiRefNet AI segmentation on this device…',percent:null});
+  report({message:'Removing background…',percent:null});
   // Let React paint the processing indicator before CPU-heavy inference.
   await new Promise(resolve=>setTimeout(resolve,0));
   const output=await model({input_image:pixel_values});
   const matte=logitsToAlpha(output?.logits ?? output?.output_image);
-  report({message:'Applying alpha matte at original image resolution…',percent:null});
+  report({message:'Finishing your photo…',percent:null});
   const blob=await composeOriginalSizePng(file,matte);
   return blob;
 }
