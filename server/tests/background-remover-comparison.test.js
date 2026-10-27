@@ -11,6 +11,8 @@ describe('background remover comparison and loading experience', () => {
     expect(page).not.toContain('aiCutout');
     expect(page).not.toContain('type="range"');
     expect(page).toContain('<BackgroundComparison');
+    expect(page).toContain('width="max-w-4xl"');
+    expect(page).not.toContain('aria-label="Before and after preview"');
   });
 
   it('supports direct pointer drag on the image and accessible keyboard input', () => {
@@ -28,6 +30,9 @@ describe('background remover comparison and loading experience', () => {
     expect(comparison).toContain('Number.isFinite(progress?.percent)');
     expect(comparison).toContain('This may take a while on CPU.');
     expect(page).toContain('processing={busy}');
+    expect(comparison).toContain('br-success-check');
+    expect(page).toContain('succeeded={successVisible}');
+    expect(page).not.toContain('Your image is ready');
   });
 
   it('keeps download and original dimensions', () => {
