@@ -3,6 +3,7 @@ import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import Dashboard from './pages/Dashboard.jsx';
 import Invoices from './pages/Invoices.jsx';
 import Settings from './pages/Settings.jsx';
+import DocumentConverter from './pages/DocumentConverter.jsx';
 import Sidebar from './components/layout/Sidebar.jsx';
 import Topbar from './components/layout/Topbar.jsx';
 import { useStoredBool, useTheme } from './utils/theme.js';
@@ -32,6 +33,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/invoices" element={<Invoices />} />
+              <Route path="/document-converter" element={<DocumentConverter />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/settings/:section" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" />} />
