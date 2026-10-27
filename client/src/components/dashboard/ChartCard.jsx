@@ -17,12 +17,12 @@ export const ChartTooltip = ({ active, payload, label, format, labelKey }) => {
   if (!active || !payload?.length) return null;
   const heading = labelKey ? payload[0].payload[labelKey] : label;
   return (
-    <div className="rounded-lg bg-tooltip px-3 py-2 text-xs text-tooltip-fg shadow-pop">
+    <div className="chart-tooltip">
       {heading != null && <p className="mb-1 font-semibold">{heading}</p>}
       {payload.map((p) => (
         <p key={p.dataKey ?? p.name} className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full" style={{ background: p.color || p.payload?.fill }} aria-hidden="true" />
-          <span className="opacity-80">{p.name}</span><span className="num ml-auto pl-3 font-medium">{format ? format(p.value, p) : p.value}</span>
+          <span className="chart-tooltip-muted">{p.name}</span><span className="num ml-auto pl-3 font-medium">{format ? format(p.value, p) : p.value}</span>
         </p>))}
     </div>
   );
