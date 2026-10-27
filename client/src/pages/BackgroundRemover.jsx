@@ -10,16 +10,19 @@ export default function BackgroundRemover() {
   const [file,setFile]=useState(null),[dimensions,setDimensions]=useState(null);
   const [beforeUrl,setBeforeUrl]=useState(''),[afterUrl,setAfterUrl]=useState('');
   const [result,setResult]=useState(null),[dialog,setDialog]=useState(false);
+  const [successVisible,setSuccessVisible]=useState(false);
   const [busy,setBusy]=useState(false),[checking,setChecking]=useState(false);
   const [drag,setDrag]=useState(false),[error,setError]=useState('');
   const [progress,setProgress]=useState({message:'',percent:null});
   const [compare,setCompare]=useState(50);
   const picker=useRef(null),beforeRef=useRef(null),afterRef=useRef(null),generation=useRef(0),active=useRef(true);
-  const downloadUrl=useRef(null);
-  useEffect(()=>()=>{active.current=false;generation.current++;if(beforeRef.current)URL.revokeObjectURL(beforeRef.current);if(afterRef.current)URL.revokeObjectURL(afterRef.current);if(downloadUrl.current)URL.revokeObjectURL(downloadUrl.current);},[]);
+  const downloadUrl=useRef(null),successTimer=useRef(null);
+  useEffect(()=>()=>{active.current=false;generation.current++;if(beforeRef.current)URL.revokeObjectURL(beforeRef.current);if(afterRef.current)URL.revokeObjectURL(afterRef.current);if(downloadUrl.current && downloadUrl.current!==afterRef.current)URL.revokeObjectURL(downloadUrl.current);if(successTimer.current)clearTimeout(successTimer.current);},[]);
   const discardOutput=useCallback(()=>{
+    if(successTimer.current)clearTimeout(successTimer.current);
+    if(downloadUrl.current && downloadUrl.current!==afterRef.current)URL.revokeObjectURL(downloadUrl.current);
     if(afterRef.current)URL.revokeObjectURL(afterRef.current);
-    afterRef.current=null;if(downloadUrl.current)URL.revokeObjectURL(downloadUrl.current);downloadUrl.current=null;setAfterUrl('');setResult(null);setDialog(false);
+    afterRef.current=null;downloadUrl.current=null;setAfterUrl('');setResult(null);setSuccessVisible(false);
   },[]);
   const select=useCallback(async (image)=>{
     if(!image||busy||checking)return;
@@ -54,7 +57,7 @@ export default function BackgroundRemover() {
   const remove=async()=>{
     if(!file||busy||checking)return;
     const id=++generation.current;
-    setBusy(true);setError('');discardOutput();setProgress({message:'Starting AI background removal…',percent:null});
+    setBusy(true);setError('');discardOutput();setDialog(true);setProgress({message:'Starting AI background removal…',percent:null});
     try {
       const converted=await cutOutBackground(file,(state)=>{
         if(active.current&&id===generation.current)setProgress(state);
@@ -63,8 +66,9 @@ export default function BackgroundRemover() {
       const url=URL.createObjectURL(converted.blob);
       afterRef.current=url;downloadUrl.current=url;setAfterUrl(url);
       setResult({name:transparentFileName(file.name),size:converted.blob.size,engine:converted.engine});
-      setCompare(50);setDialog(true);
-      setProgress({message:'Background successfully removed.',percent:100});
+      setCompare(50);setSuccessVisible(true);
+      setProgress({message:'Background successfully removed.',percent:null});
+      successTimer.current=setTimeout(()=>{if(active.current&&id===generation.current)setSuccessVisible(false);},1250);
     } catch(e) {
       if(active.current&&id===generation.current)setError(e?.message||'Unable to remove the background. Try another image.');
     } finally {if(active.current&&id===generation.current)setBusy(false);}
@@ -75,6 +79,7 @@ export default function BackgroundRemover() {
     link.href=downloadUrl.current;link.download=result.name;
     document.body.appendChild(link);link.click();link.remove();
   };
+  const closeWorkspace=()=>{if(!busy)setDialog(false);};
   return <div className="mx-auto max-w-6xl space-y-5">
     <PageHeader title="Image Background Remover" description="Remove backgrounds with open-source AI. Your photos stay in your browser. BiRefNet General Lite produces a transparent PNG ready to preview and download." actions={file&&<button className="btn btn-secondary" disabled={busy||checking} onClick={reset}><RefreshCw size={15}/>New image</button>}/>
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
@@ -113,27 +118,31 @@ export default function BackgroundRemover() {
             {!busy&&<Sparkles size={15}/>}
           </button>
         </section>
-        <section className="card card-pad space-y-4" aria-label="Before and after preview">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div><h2 className="text-base font-semibold text-fg">Before & after</h2><p className="mt-1 text-xs text-fg-muted">Drag the vertical divider on the image to reveal the original and transparent result.</p></div>
-            {result&&<button className="btn btn-secondary" onClick={()=>setDialog(true)}><Download size={15}/>Download PNG</button>}
-          </div>
-          <BackgroundComparison originalUrl={beforeUrl} processedUrl={afterUrl} dimensions={dimensions}
-            compare={compare} onCompare={setCompare} processing={busy} checking={checking} progress={progress}/>
-        </section>
       </div>
       <aside className="space-y-4">
         <div className="card card-pad"><div className="flex items-center gap-2"><ShieldCheck size={18} className="text-success-ink"/><h3 className="font-semibold text-fg">Private processing</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Images are processed on your device. No image is uploaded to the app server or stored in the invoice database.</p><p className="mt-3 flex items-center gap-2 text-xs text-fg-subtle"><LockKeyhole size={14}/>Nothing saved after this session</p></div>
         <div className="card card-pad"><div className="flex items-center gap-2"><Sparkles size={18} className="text-brand"/><h3 className="font-semibold text-fg">Open-source AI</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Powered by MIT-licensed BiRefNet General Lite model weights and Apache-2.0 Transformers.js running locally in WebAssembly. The model downloads on first use and is cached in your browser. CPU inference may require substantial memory and time.</p><p className="mt-3 text-xs leading-relaxed text-fg-subtle">The output is a transparent PNG at the original image dimensions where supported. Fine hair or translucent objects may still have imperfect edges.</p></div>
       </aside>
     </div>
-    {result&&dialog&&<Modal title="Your image is ready" description="Background removed successfully. Download your finished image." width="max-w-md" onClose={()=>setDialog(false)} footer={<>
-      <button type="button" className="btn btn-secondary" onClick={()=>setDialog(false)}>Close</button>
-      <button type="button" data-autofocus className="btn btn-primary" onClick={download}><Download size={16}/>Download file</button>
-    </>}>
-      <div className="flex flex-col items-center gap-3 py-2 text-center"><span className="grid h-16 w-16 place-items-center rounded-full bg-success-soft text-success-ink"><CheckCircle2 size={32}/></span><h3 className="text-base font-semibold text-fg">Your image is ready</h3></div>
-      <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-3"><ImagePlus size={21} className="shrink-0 text-brand-ink"/><div className="min-w-0"><p className="break-all text-sm font-medium text-fg">{result.name}</p><p className="mt-1 text-xs text-fg-muted">{readableSize(result.size)} · Transparent PNG</p></div></div>
+    {dialog && <Modal title="Background removal" description={busy ? "BiRefNet is processing your image on your device." : result ? "Compare your image and download the transparent PNG." : "Review the processing result."}
+      width="max-w-4xl" onClose={closeWorkspace} dismissOnBackdrop={!busy}
+      footer={<>
+        {!busy && <button type="button" className="btn btn-secondary" onClick={closeWorkspace}>Close</button>}
+        {result && !busy && <button type="button" data-autofocus className="btn btn-primary" onClick={download}><Download size={16}/>Download transparent PNG</button>}
+      </>}>
+      <BackgroundComparison originalUrl={beforeUrl} processedUrl={afterUrl} dimensions={dimensions}
+        compare={compare} onCompare={setCompare} processing={busy} checking={false} progress={progress} succeeded={successVisible}/>
+      {!busy && !result && error && <div role="alert" className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-ink">{error}</div>}
+      {result && <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/50 p-3">
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-fg">{result.name}</span>
+          <span className="block text-xs text-fg-muted">{readableSize(result.size)} · Transparent PNG</span>
+        </span>
+        <CheckCircle2 className="shrink-0 text-success-ink" size={22} aria-label="Completed"/>
+      </div>}
     </Modal>}
-    {result&&!dialog&&<button type="button" onClick={()=>setDialog(true)} className="fixed bottom-5 right-4 z-40 flex items-center gap-3 rounded-xl border border-success/30 bg-surface px-4 py-3 shadow-pop sm:right-6"><CheckCircle2 className="text-success-ink" size={20}/><span className="text-sm font-semibold text-fg">PNG ready to download</span><Download size={16} className="text-brand-ink"/></button>}
+    {result && !dialog && <button type="button" onClick={()=>setDialog(true)} className="fixed bottom-5 right-4 z-40 flex items-center gap-3 rounded-xl border border-success/30 bg-surface px-4 py-3 shadow-pop sm:right-6">
+      <CheckCircle2 className="text-success-ink" size={20}/><span className="text-sm font-semibold text-fg">View completed image</span><Download size={16} className="text-brand-ink"/>
+    </button>}
   </div>;
 }
