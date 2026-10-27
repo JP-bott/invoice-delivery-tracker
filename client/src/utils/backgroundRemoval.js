@@ -90,6 +90,7 @@ export async function cutOutBackground(file, report = () => {}) {
     if (/memory|alloc|wasm|out.of.memory/i.test(message)) {
       throw new Error('Not enough memory to finish. Try a smaller photo or close other tabs.');
     }
-    throw new Error(message || 'Could not remove the background. Please try another photo.');
+    // Keep technical runtime errors out of the user-facing interface.
+    throw new Error('Could not remove the background. Please try another photo.');
   }
 }
