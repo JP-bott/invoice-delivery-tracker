@@ -14,10 +14,11 @@ describe('image background remover input and output safety', () => {
   });
   it('locks inference to WASM so the broken WebGPU shader is not invoked', () => {
     expect(BACKGROUND_REMOVAL_DEVICE).toBe('wasm');
-    expect(describeRemovalProgress({phase:'processing',progress:35})).toEqual({
-      message:'Removing background and refining edges…',percent:35,
+    expect(describeRemovalProgress({message:'Running BiRefNet',percent:35})).toEqual({
+      message:'Running BiRefNet',percent:35,
     });
-    expect(describeRemovalProgress({phase:'downloading-model',progress:180}).percent).toBe(100);
+    expect(describeRemovalProgress({message:'Segmenting image'}).percent).toBeNull();
+    expect(describeRemovalProgress({percent:180}).percent).toBeNull();
   });
   it('normalizes download filenames', () => {
     expect(transparentFileName('photo.2026.jpg')).toBe('photo.2026_no_background.png');

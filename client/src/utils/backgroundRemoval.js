@@ -62,50 +62,34 @@ export async function validateTransparentPng(blob) {
   }
   return blob;
 }
-// The BiRefNet Lite model used by the previous WebGPU-first path can trigger
-// ONNX Runtime's GatherND computeSliceOffsets WGSL bug, producing hundreds
-// of validation errors without a usable mask. Force the CPU/WASM provider
-// rather than merely relying on model initialization fallback.
-// https://github.com/microsoft/onnxruntime/issues/32731
+// Prefer the pinned official-model-derived BiRefNet General Lite 512 ONNX
+// with reliable CPU/WASM execution (avoids earlier WebGPU WGSL shader errors).
 export const BACKGROUND_REMOVAL_DEVICE = 'wasm';
 
 export function describeRemovalProgress(event = {}) {
-  const raw = Number(event.progress);
-  const percent = Number.isFinite(raw) && raw >= 0
-    ? Math.max(0, Math.min(100, Math.round(raw))) : null;
-  const phase = String(event.phase || '');
-  const messages = {
-    'loading-model': 'Loading local AI model…',
-    'downloading-model': 'Downloading AI model to your browser…',
-    initializing: 'Starting CPU compatibility engine…',
-    fallback: 'Switching to compatible CPU processing…',
-    ready: 'AI model ready…',
-    processing: 'Removing background and refining edges…',
+  return {
+    message: String(event.message || 'Processing with BiRefNet General Lite…'),
+    percent: Number.isFinite(event.percent) && event.percent >= 0 && event.percent <= 100
+      ? event.percent : null,
   };
-  return {message: event.message || messages[phase] || 'Removing background…', percent};
 }
 
 export async function cutOutBackground(file, report = () => {}) {
   await inspectImage(file);
-  report({message:'Preparing reliable CPU compatibility mode…',percent:null});
+  report({message:'Preparing BiRefNet General Lite…',percent:null});
   try {
-    const {removeBackground} = await import('@resizebox/background-remover');
-    const output = await removeBackground(file,{
-      device: BACKGROUND_REMOVAL_DEVICE,
-      background: 'transparent',
-      onProgress: (event) => report(describeRemovalProgress(event)),
-    });
-    // Reject corrupted, opaque, or empty results instead of offering an invalid download.
-    const png = await validateTransparentPng(output?.blob);
-    return {blob:png,engine:'ORMBG',mode:'Local WebAssembly (CPU)'};
+    const {runBiRefNet} = await import('./birefnetLite.js');
+    const blob = await runBiRefNet(file, state => report(describeRemovalProgress(state)));
+    const png = await validateTransparentPng(blob);
+    return {blob:png,engine:'BiRefNet General Lite',mode:'Local WebAssembly'};
   } catch (error) {
     const message = String(error?.message || '');
-    if (/fetch|download|network|model.*load/i.test(message)) {
-      throw new Error('Could not load the local AI model. Check your connection and try again.');
+    if (/fetch|download|network|failed to load model/i.test(message)) {
+      throw new Error('BiRefNet model download failed. Check your internet connection or browser storage, then retry.');
     }
-    if (/memory|allocation|wasm|out.of.memory/i.test(message)) {
-      throw new Error('Your browser ran out of memory while processing. Close unused tabs or try a smaller image.');
+    if (/memory|alloc|wasm|out.of.memory/i.test(message)) {
+      throw new Error('Your browser lacks enough memory for BiRefNet. Close unused tabs or use a device with more RAM.');
     }
-    throw new Error(message || 'Background removal could not finish. Try another image.');
+    throw new Error(message || 'BiRefNet background removal failed. Try another image.');
   }
 }
