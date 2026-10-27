@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, ImagePlus, Layers2, LoaderCircle, LockKeyhole, RefreshCw, Scissors, ShieldCheck, Sparkles, UploadCloud, X } from 'lucide-react';
 import { PageHeader } from '../components/ui.jsx';
 import Modal from '../components/Modal.jsx';
+import BackgroundStudio from '../components/background/BackgroundStudio.jsx';
 import { inspectImage, transparentFileName, cutOutBackground } from '../utils/backgroundRemoval.js';
 
 const readableSize=(n)=>n>=1048576?`${(n/1048576).toFixed(2)} MB`:`${(n/1024).toFixed(1)} KB`;
@@ -14,10 +15,11 @@ export default function BackgroundRemover() {
   const [progress,setProgress]=useState({message:'',percent:null});
   const [compare,setCompare]=useState(50);
   const picker=useRef(null),beforeRef=useRef(null),afterRef=useRef(null),generation=useRef(0),active=useRef(true);
-  useEffect(()=>()=>{active.current=false;generation.current++;if(beforeRef.current)URL.revokeObjectURL(beforeRef.current);if(afterRef.current)URL.revokeObjectURL(afterRef.current);},[]);
+  const aiCutout=useRef(null),downloadUrl=useRef(null);
+  useEffect(()=>()=>{active.current=false;generation.current++;if(beforeRef.current)URL.revokeObjectURL(beforeRef.current);if(afterRef.current)URL.revokeObjectURL(afterRef.current);if(downloadUrl.current)URL.revokeObjectURL(downloadUrl.current);},[]);
   const discardOutput=useCallback(()=>{
     if(afterRef.current)URL.revokeObjectURL(afterRef.current);
-    afterRef.current=null;setAfterUrl('');setResult(null);setDialog(false);
+    afterRef.current=null;aiCutout.current=null;if(downloadUrl.current)URL.revokeObjectURL(downloadUrl.current);downloadUrl.current=null;setAfterUrl('');setResult(null);setDialog(false);
   },[]);
   const select=useCallback(async (image)=>{
     if(!image||busy||checking)return;
@@ -59,7 +61,7 @@ export default function BackgroundRemover() {
       });
       if(!active.current||id!==generation.current)return;
       const url=URL.createObjectURL(converted.blob);
-      afterRef.current=url;setAfterUrl(url);
+      afterRef.current=url;aiCutout.current=converted.blob;downloadUrl.current=url;setAfterUrl(url);
       setResult({name:transparentFileName(file.name),size:converted.blob.size,engine:converted.engine});
       setCompare(50);setDialog(true);
       setProgress({message:'Background successfully removed.',percent:100});
@@ -67,10 +69,15 @@ export default function BackgroundRemover() {
       if(active.current&&id===generation.current)setError(e?.message||'Unable to remove the background. Try another image.');
     } finally {if(active.current&&id===generation.current)setBusy(false);}
   };
+  const readyEdited=(output)=>{
+    if(downloadUrl.current && downloadUrl.current!==afterRef.current)URL.revokeObjectURL(downloadUrl.current);
+    downloadUrl.current=URL.createObjectURL(output.blob);
+    setResult({name:output.name,size:output.blob.size,engine:'Edited cutout'});setDialog(true);
+  };
   const download=()=>{
-    if(!afterRef.current||!result)return;
+    if(!downloadUrl.current||!result)return;
     const link=document.createElement('a');
-    link.href=afterRef.current;link.download=result.name;
+    link.href=downloadUrl.current;link.download=result.name;
     document.body.appendChild(link);link.click();link.remove();
   };
   return <div className="mx-auto max-w-6xl space-y-5">
@@ -137,19 +144,20 @@ export default function BackgroundRemover() {
             </div>:
             <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-line bg-surface-2/50 text-center"><div><Layers2 size={29} className="mx-auto text-fg-subtle"/><p className="mt-3 text-sm font-medium text-fg">Your preview will appear here</p><p className="mt-1 text-xs text-fg-muted">Upload an image to begin</p></div></div>}
         </section>
+        {file && aiCutout.current && afterUrl && <BackgroundStudio key={afterUrl} original={file} cutout={aiCutout.current} originalName={file.name} onDownloadReady={readyEdited}/>}
       </div>
       <aside className="space-y-4">
         <div className="card card-pad"><div className="flex items-center gap-2"><ShieldCheck size={18} className="text-success-ink"/><h3 className="font-semibold text-fg">Private processing</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Images are processed on your device. No image is uploaded to the app server or stored in the invoice database.</p><p className="mt-3 flex items-center gap-2 text-xs text-fg-subtle"><LockKeyhole size={14}/>Nothing saved after this session</p></div>
-        <div className="card card-pad"><div className="flex items-center gap-2"><Sparkles size={18} className="text-brand"/><h3 className="font-semibold text-fg">Open-source AI</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Powered by open-source ORMBG using CPU WebAssembly compatibility mode. The model downloads on first use. CPU processing may take longer but avoids the reported WebGPU shader issue.</p><p className="mt-3 text-xs leading-relaxed text-fg-subtle">Fine edges, transparent objects, and complex scenes may require manual touch-up. PNG preserves a transparent background.</p></div>
+        <div className="card card-pad"><div className="flex items-center gap-2"><Sparkles size={18} className="text-brand"/><h3 className="font-semibold text-fg">Open-source AI</h3></div><p className="mt-2 text-sm leading-relaxed text-fg-muted">Powered by open-source ORMBG using CPU WebAssembly compatibility mode. The model downloads on first use. CPU processing may take longer but avoids the reported WebGPU shader issue.</p><p className="mt-3 text-xs leading-relaxed text-fg-subtle">Use the creative studio to refine edges, erase or restore the subject, change the background, and export in PNG or JPG. AI masks may still need manual touch-up.</p></div>
       </aside>
     </div>
-    {result&&dialog&&<Modal title="Your image is ready" description="Background removed successfully. Download the transparent PNG." width="max-w-md" onClose={()=>setDialog(false)} footer={<>
+    {result&&dialog&&<Modal title="Your image is ready" description="Background removed successfully. Download your finished image." width="max-w-md" onClose={()=>setDialog(false)} footer={<>
       <button type="button" className="btn btn-secondary" onClick={()=>setDialog(false)}>Close</button>
-      <button type="button" data-autofocus className="btn btn-primary" onClick={download}><Download size={16}/>Download PNG</button>
+      <button type="button" data-autofocus className="btn btn-primary" onClick={download}><Download size={16}/>Download file</button>
     </>}>
-      <div className="flex flex-col items-center gap-3 py-2 text-center"><span className="grid h-16 w-16 place-items-center rounded-full bg-success-soft text-success-ink"><CheckCircle2 size={32}/></span><h3 className="text-base font-semibold text-fg">Transparent PNG generated</h3></div>
-      <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-3"><ImagePlus size={21} className="shrink-0 text-brand-ink"/><div className="min-w-0"><p className="break-all text-sm font-medium text-fg">{result.name}</p><p className="mt-1 text-xs text-fg-muted">{readableSize(result.size)} · Transparent PNG</p></div></div>
+      <div className="flex flex-col items-center gap-3 py-2 text-center"><span className="grid h-16 w-16 place-items-center rounded-full bg-success-soft text-success-ink"><CheckCircle2 size={32}/></span><h3 className="text-base font-semibold text-fg">Your image is ready</h3></div>
+      <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-3"><ImagePlus size={21} className="shrink-0 text-brand-ink"/><div className="min-w-0"><p className="break-all text-sm font-medium text-fg">{result.name}</p><p className="mt-1 text-xs text-fg-muted">{readableSize(result.size)} · Edited image</p></div></div>
     </Modal>}
-    {result&&!dialog&&<button type="button" onClick={()=>setDialog(true)} className="fixed bottom-5 right-4 z-40 flex items-center gap-3 rounded-xl border border-success/30 bg-surface px-4 py-3 shadow-pop sm:right-6"><CheckCircle2 className="text-success-ink" size={20}/><span className="text-sm font-semibold text-fg">PNG ready to download</span><Download size={16} className="text-brand-ink"/></button>}
+    {result&&!dialog&&<button type="button" onClick={()=>setDialog(true)} className="fixed bottom-5 right-4 z-40 flex items-center gap-3 rounded-xl border border-success/30 bg-surface px-4 py-3 shadow-pop sm:right-6"><CheckCircle2 className="text-success-ink" size={20}/><span className="text-sm font-semibold text-fg">Image ready to download</span><Download size={16} className="text-brand-ink"/></button>}
   </div>;
 }
