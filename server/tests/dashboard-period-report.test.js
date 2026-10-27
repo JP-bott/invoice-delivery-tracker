@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { dashboardBounds, aggregateDashboard, classifyInvoice } from '../../shared/dashboardReport.js';
 const inv=(id,date_issued,amount_centavos,overrides={})=>({
   id, date_issued, amount_centavos, amount_paid_centavos:0,
@@ -64,4 +65,17 @@ describe('dashboard aggregation',()=>{
   const r=aggregateDashboard([inv(1,'2026-10-10',10000)],[],dashboardBounds('quarter','2026-10-27'));
   expect(r.kpis.quarterChangePercent).toBeNull();
  });
+});
+
+describe('dashboard period filter regression',()=>{
+  it('shows only month, quarter and year options',()=>{
+    const page=readFileSync(new URL('../../client/src/pages/Dashboard.jsx',import.meta.url),'utf8');
+    const constants=readFileSync(new URL('../../client/src/utils/constants.js',import.meta.url),'utf8');
+    expect(page).toContain("const VALID=['month','quarter','year']");
+    expect(page).not.toContain('Custom Range');
+    expect(page).not.toContain('Last 7 Days');
+    expect(page).not.toContain('All Time');
+    expect(page).not.toContain('<FilterControl');
+    expect(constants).not.toContain('PRESETS');
+  });
 });
