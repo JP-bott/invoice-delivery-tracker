@@ -66,46 +66,56 @@ async function pdfToImages(file, extension, progress) {
   return {blob:await valid(zipped,'zip'),extension:'zip',detail:`${images.length} images in ZIP`};
 }
 
-// A PDF does not contain Word document structure. Reconstruct selectable text,
-// preserving page divisions, but not guaranteeing the original placement/graphics.
-// Scanned PDFs are explicitly rejected rather than yielding an empty DOCX.
+// Place a rendered copy of each original PDF page in a Word section with matching
+// dimensions and no margins. This preserves page appearance instead of reflowing text.
+// The page image is intentionally not editable; converting text into an editable document
+// cannot guarantee the original positioning of fonts, tables, charts and graphics.
 async function pdfToWord(file, progress) {
   const pdf = await loadPdf(file);
-  const {Document, Paragraph, TextRun, PageBreak, Packer} = await import('docx');
-  const paragraphs = [];
-  let characterCount = 0;
+  const {Document, Paragraph, ImageRun, Packer} = await import('docx');
+  const sections = [];
   try {
-    for(let number=1;number<=pdf.numPages;number++){
-      progress(`Extracting editable text, page ${number} of ${pdf.numPages}`);
-      const page=await pdf.getPage(number);
-      const {items}=await page.getTextContent();
-      const lines = new Map();
-      for(const item of items) {
-        const str = item.str || '';
-        if(!str.trim()) continue;
-        const y=Math.round(item.transform[5] / 3) * 3;
-        if(!lines.has(y)) lines.set(y,[]);
-        lines.get(y).push({x:item.transform[4],str});
-        characterCount+=str.trim().length;
-      }
-      if(number>1) paragraphs.push(new Paragraph({children:[new PageBreak()]}));
-      for(const [y,words] of [...lines].sort((a,b)=>b[0]-a[0])){
-        words.sort((a,b)=>a.x-b.x);
-        let line='', right=-Infinity;
-        for(const word of words){
-          if(line && word.x > right+2) line+=' ';
-          line+=word.str;
-          right=word.x+word.str.length*3;
-        }
-        paragraphs.push(new Paragraph({children:[new TextRun(line.trim())],spacing:{after:75}}));
-      }
+    for (let number = 1; number <= pdf.numPages; number++) {
+      progress(`Preserving PDF page ${number} of ${pdf.numPages}`);
+      const page = await pdf.getPage(number);
+      const viewport = page.getViewport({scale: 1});
+      const scale = Math.min(2, 4096 / Math.max(viewport.width, viewport.height),
+        Math.sqrt(10_000_000 / (viewport.width * viewport.height)));
+      const imageViewport = page.getViewport({scale});
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(imageViewport.width);
+      canvas.height = Math.ceil(imageViewport.height);
+      const context = canvas.getContext('2d', {alpha:false});
+      if(!context) throw new Error('Cannot render PDF pages in this browser.');
+      context.fillStyle='#ffffff';
+      context.fillRect(0,0,canvas.width,canvas.height);
+      await page.render({canvasContext:context,viewport:imageViewport,canvas}).promise;
+      const bytes = new Uint8Array(await (await canvasBlob(canvas,'png')).arrayBuffer());
+      canvas.width=canvas.height=0;
+      // PDF points to DXA: 1pt = 20 twips. DOCX sections retain the original page ratio.
+      const widthTwips = Math.round(viewport.width*20);
+      const heightTwips = Math.round(viewport.height*20);
+      // Account for Word's minimum document height and avoid spilling to another page.
+      const imageWidth = viewport.width * (96/72) * 0.995;
+      const imageHeight = viewport.height * (96/72) * 0.995;
+      sections.push({
+        properties:{
+          page:{
+            size:{width:widthTwips,height:heightTwips},
+            margin:{top:0,right:0,bottom:0,left:0,header:0,footer:0,gutter:0},
+          },
+        },
+        children:[new Paragraph({
+          spacing:{before:0,after:0,line:240},
+          children:[new ImageRun({data:bytes,type:'png',transformation:{width:imageWidth,height:imageHeight},altText:{title:`PDF page ${number}`,description:'Original PDF page visually preserved',name:`PDF page ${number}`}})],
+        })],
+      });
       page.cleanup();
     }
   } finally { await pdf.destroy(); }
-  if(!characterCount) throw new Error('No selectable text found. Scanned/image-only PDFs need OCR, which is not included.');
-  const word=new Document({sections:[{properties:{},children:paragraphs}]});
+  const word=new Document({sections});
   const blob=await Packer.toBlob(word);
-  return {blob:await valid(blob,'docx'),extension:'docx',detail:'Editable text extracted from PDF'};
+  return {blob:await valid(blob,'docx'),extension:'docx',detail:`${sections.length} original PDF pages preserved as images (not editable)`};
 }
 
 function excelText(cell) {
