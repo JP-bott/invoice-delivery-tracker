@@ -150,7 +150,7 @@ const MonthTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   const m = payload[0].payload;
   return (
-    <div className="rounded-lg bg-tooltip px-3 py-2 text-xs text-tooltip-fg shadow-pop">
+    <div className="chart-tooltip">
       <p className="mb-1 font-semibold">{m.label} {m.dateFrom.slice(0, 4)} · {plural(m.total, 'invoice')}</p>
       {[...STATES].reverse().filter((s) => m[s.key] > 0).map((s) => (
         <p key={s.key} className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ background: s.color }} aria-hidden="true" /><span className="opacity-80">{s.label}</span><span className="num ml-auto pl-4 font-medium">{m[s.key]}</span></p>

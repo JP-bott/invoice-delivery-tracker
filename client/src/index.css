@@ -34,17 +34,25 @@
   --danger:  #dc2626;  --danger-soft:  #fdeceb;  --danger-ink:  #b42318;
   --info:    #0284c7;  --info-soft:    #e6f3fb;  --info-ink:    #075985;
 
-  --tooltip-bg: #14171f;
-  --tooltip-fg: #f4f5f7;
+  /* Soft tooltip panels, with readable text in the current theme. */
+  --tooltip-bg: #f8fafc;
+  --tooltip-fg: #263247;
+  --tooltip-muted: #626e80;
+  --tooltip-border: #d7dfeb;
 
-  /* Chart palette: validated for contrast on both themes */
-  --chart-1: #4f46e5;
-  --chart-2: #0d9488;
-  --chart-3: #d97706;
-  --chart-4: #0284c7;
-  --chart-5: #9333ea;
-  --chart-grid: #e4e7ec;
+  /* Muted pastel charts: distinguishable but not overly saturated. */
+  --chart-1: #898dd4;
+  --chart-2: #6aaea4;
+  --chart-3: #d2ac73;
+  --chart-4: #80add0;
+  --chart-5: #ae9bca;
+  --chart-positive: #74b49b;
+  --chart-negative: #d48f94;
+  --chart-caution: #d2ad73;
+  --chart-grid: #e7ebf1;
   --chart-muted: #b5bcc8;
+  --chart-hover-fill: #eef1f7;
+  --chart-hover-stroke: #626d85;
 
   --aging-overdue: #dc2626;
   --aging-today: #ea580c;
@@ -95,16 +103,23 @@
   --danger:  #f2655c;  --danger-soft:  #2f1816;  --danger-ink:  #ff9a93;
   --info:    #3da5e0;  --info-soft:    #10273a;  --info-ink:    #8cd0f5;
 
-  --tooltip-bg: #eef0f4;
-  --tooltip-fg: #14171f;
+  --tooltip-bg: #262d3a;
+  --tooltip-fg: #edf1f7;
+  --tooltip-muted: #b5c0ce;
+  --tooltip-border: #475062;
 
-  --chart-1: #8c92ff;
-  --chart-2: #2dd4bf;
-  --chart-3: #f0a53a;
-  --chart-4: #4cb4ee;
-  --chart-5: #c084fc;
-  --chart-grid: #262b36;
-  --chart-muted: #556075;
+  --chart-1: #a8aceb;
+  --chart-2: #85c5b9;
+  --chart-3: #e4bf8f;
+  --chart-4: #93c3df;
+  --chart-5: #c6b3de;
+  --chart-positive: #8dc9b1;
+  --chart-negative: #e2a5aa;
+  --chart-caution: #e4bf8f;
+  --chart-grid: #303846;
+  --chart-muted: #6b788f;
+  --chart-hover-fill: #303848;
+  --chart-hover-stroke: #d7dcef;
 
   --aging-overdue: #f2655c;
   --aging-today: #fb8a4c;
@@ -288,6 +303,41 @@
 .anim-pop { animation: pop-in var(--dur) var(--ease); }
 .anim-slide { animation: slide-up var(--dur) var(--ease); }
 
+/* Chart panels remain readable and understated in both themes. */
+.chart-tooltip {
+  min-width: 148px;
+  max-width: min(280px, 75vw);
+  padding: 10px 12px;
+  color: var(--tooltip-fg);
+  background: var(--tooltip-bg);
+  border: 1px solid var(--tooltip-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px -14px rgb(15 23 42 / 0.3), 0 2px 6px rgb(15 23 42 / 0.06);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.dark .chart-tooltip {
+  box-shadow: 0 10px 28px -14px rgb(0 0 0 / 0.65), 0 2px 8px rgb(0 0 0 / 0.18);
+}
+.chart-tooltip-muted { color: var(--tooltip-muted); }
+/* Fallback for any Recharts tooltip still using its built-in renderer. */
+.recharts-default-tooltip {
+  background: var(--tooltip-bg) !important;
+  color: var(--tooltip-fg) !important;
+  border: 1px solid var(--tooltip-border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px -14px rgb(15 23 42 / .3);
+}
+.recharts-default-tooltip .recharts-tooltip-label { color: var(--tooltip-fg) !important; font-weight: 600; }
+.recharts-default-tooltip .recharts-tooltip-item { color: var(--tooltip-fg) !important; }
+.recharts-default-tooltip .recharts-tooltip-item-name { color: var(--tooltip-muted); }
+
+/* Feedback on chart hover is restrained, including on touch-capable browsers. */
+.recharts-bar-rectangle { transition: filter 160ms ease-out; }
+.recharts-bar-rectangle:hover { filter: brightness(1.07); }
+.recharts-sector { transition: filter 160ms ease-out; }
+.recharts-sector:hover { filter: brightness(1.07); }
+.recharts-tooltip-cursor { transition: fill 130ms ease-out; }
 /* Recharts: remove default focus box, keep keyboard-visible ring on sectors */
 .recharts-wrapper, .recharts-surface { outline: none; }
 

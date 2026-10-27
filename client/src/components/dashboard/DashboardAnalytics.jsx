@@ -31,7 +31,7 @@ export default function DashboardAnalytics({ data }) {
                 <Pie data={chartData} dataKey="value" nameKey="label" innerRadius={54} outerRadius={82} paddingAngle={2} stroke="var(--surface)" strokeWidth={2} cursor="pointer" onClick={(_, index) => openCategory(chartData[index] && categories.find((c) => c.key === chartData[index].key))}>
                   {chartData.map((c) => <Cell key={c.key} fill={AGING_COLORS[c.key]} />)}
                 </Pie>
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div className="rounded-lg bg-tooltip px-3 py-2 text-xs text-tooltip-fg shadow-pop"><p className="font-semibold">{payload[0].payload.label}</p><p className="num mt-0.5">{plural(payload[0].payload.count, 'invoice')} · {peso(payload[0].payload.amount)}</p></div> : null} />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? <div className="chart-tooltip"><p className="font-semibold">{payload[0].payload.label}</p><p className="num mt-0.5">{plural(payload[0].payload.count, 'invoice')} · {peso(payload[0].payload.amount)}</p></div> : null} />
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="eyebrow">Unpaid</span><strong className="num mt-0.5 text-2xl text-fg">{invoiceCount}</strong></div>
