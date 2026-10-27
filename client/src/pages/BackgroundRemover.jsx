@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Download, ImagePlus, LoaderCircle, LockKeyhole, RefreshCw, Scissors, UploadCloud, X } from 'lucide-react';
+import { CheckCircle2, Download, ImagePlus, LoaderCircle, LockKeyhole, RefreshCw, Scissors, Sparkles, UploadCloud, X } from 'lucide-react';
 import { PageHeader } from '../components/ui.jsx';
 import Modal from '../components/Modal.jsx';
 import BackgroundComparison from '../components/background/BackgroundComparison.jsx';
