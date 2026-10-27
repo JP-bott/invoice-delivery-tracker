@@ -1,1 +1,1 @@
-export { splitInvoiceNo, sheetInvoiceNo, formatInvoiceNo } from '../../../shared/invoiceNumber.js';
+export { splitInvoiceNo, sheetInvoiceNo, formatInvoiceNo, invoiceDocumentTitle } from '../../../shared/invoiceNumber.js';
