@@ -28,10 +28,20 @@ export function Logo({ size = 'h-9 w-9' }) {
   return <img src={src} alt="" width="36" height="36" className={`${size} shrink-0 rounded-lg object-contain`} onError={() => setSrc(src === '/logo.png' ? '/logo.jpg' : null)} />;
 }
 
-export function Brand({ collapsed }) {
+// The logo doubles as the sidebar control without changing its appearance.
+// Desktop collapses/expands the sidebar; mobile dismisses the navigation drawer.
+export function Brand({ collapsed, onLogoClick, logoActionLabel }) {
   return (
     <div className={`flex h-[var(--topbar-h)] items-center gap-2.5 ${collapsed ? 'justify-center' : 'px-1.5'}`}>
-      <Logo />
+      <button
+        type="button"
+        onClick={onLogoClick}
+        aria-label={logoActionLabel}
+        title={logoActionLabel}
+        className="shrink-0 rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+      >
+        <Logo />
+      </button>
       {!collapsed && <div className="min-w-0 leading-tight"><p className="truncate text-[0.9375rem] font-semibold tracking-tight text-fg">Invoice Tracker</p><p className="truncate text-[11px] font-medium text-fg-subtle">Billing &amp; deliveries</p></div>}
     </div>
   );
@@ -44,7 +54,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   return (
     <>
       <aside aria-label="Sidebar" className={`sticky top-0 hidden h-dvh shrink-0 flex-col sidebar-shell border-r border-line px-3 transition-[width] duration-200 ease-out md:flex ${collapsed ? 'w-[var(--sidebar-w-collapsed)]' : 'w-[var(--sidebar-w)]'}`}>
-        <div className="sidebar-brand -mx-3 px-3"><Brand collapsed={collapsed} /></div>
+        <div className="sidebar-brand -mx-3 px-3"><Brand collapsed={collapsed} onLogoClick={onToggleCollapse} logoActionLabel={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} /></div>
         <nav aria-label="Main" className="mt-3 flex flex-1 flex-col gap-1">
           <Label collapsed={collapsed} />
           {NAV.map((item) => <Item key={item.to} item={item} collapsed={collapsed} />)}
@@ -60,7 +70,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
         <div className="fixed inset-0 z-40 md:hidden" role="presentation">
           <div className="anim-fade absolute inset-0 bg-black/50" onClick={onCloseMobile} />
           <aside role="dialog" aria-modal="true" aria-label="Navigation" className="anim-slide absolute inset-y-0 left-0 sidebar-shell flex w-72 max-w-[85vw] flex-col border-r border-line px-3 shadow-pop">
-            <div className="sidebar-brand -mx-3 flex items-center justify-between px-3"><Brand /><button type="button" className="btn btn-ghost btn-icon" onClick={onCloseMobile} aria-label="Close menu"><X size={18} /></button></div>
+            <div className="sidebar-brand -mx-3 flex items-center justify-between px-3"><Brand onLogoClick={onCloseMobile} logoActionLabel="Close menu" /><button type="button" className="btn btn-ghost btn-icon" onClick={onCloseMobile} aria-label="Close menu"><X size={18} /></button></div>
             <nav aria-label="Main" className="mt-3 flex flex-col gap-1">
               <Label />
               {NAV.map((item) => <Item key={item.to} item={item} onNavigate={onCloseMobile} />)}
