@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, LoaderCircle, MoveHorizontal, Sparkles } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, MoveHorizontal, Sparkles } from 'lucide-react';
 import './background-comparison.css';
 
 /**
@@ -8,7 +8,7 @@ import './background-comparison.css';
  * keyboard arrows / Home / End also work without a separate range input.
  */
 export default function BackgroundComparison({
-  originalUrl, processedUrl, dimensions, compare, onCompare, processing, checking, progress,
+  originalUrl, processedUrl, dimensions, compare, onCompare, processing, checking, progress, succeeded = false,
 }) {
   const frameRef = useRef(null);
   const pointerId = useRef(null);
@@ -108,25 +108,33 @@ export default function BackgroundComparison({
         <span className="br-label br-label-right" aria-hidden="true">Original</span>
       </>}
       {!hasResult && <span className="br-label br-label-left" aria-hidden="true">Original image</span>}
-      {(processing || checking) && (
-        <div className="br-processing-overlay" role="status" aria-live="polite">
+      {(processing || checking || succeeded) && (
+        <div className={`br-processing-overlay ${succeeded ? "br-processing-success" : ""}`} role="status" aria-live="polite">
           <div className="br-processing-panel">
-            <div className="br-processing-orbit" aria-hidden="true">
-              <span className="br-processing-halo"/>
-              <LoaderCircle className="br-processing-spinner" size={48} strokeWidth={2.2}/>
-              <Sparkles className="br-processing-center" size={19}/>
-            </div>
-            <p className="br-processing-title">{checking ? 'Checking your image' : 'AI is removing the background'}</p>
-            <p className="br-processing-message">{checking ? 'Validating the image format and dimensions…' : progress?.message || 'Preparing the AI model…'}</p>
-            <div className="br-progress-track" aria-hidden="true">
-              {processing && Number.isFinite(progress?.percent)
-                ? <div className="br-progress-known" style={{width:`${progress.percent}%`}}/>
-                : null}
-              <div className="br-progress-active" />
-            </div>
-            <p className="br-processing-note">
-              {processing ? 'This may take a while on CPU. Keep this page open.' : 'Preparing your photo…'}
-            </p>
+            {succeeded ? <>
+              <div className="br-processing-orbit br-success-orbit" aria-hidden="true">
+                <CheckCircle2 className="br-success-check" size={56} strokeWidth={1.9}/>
+              </div>
+              <p className="br-processing-title">Background removed!</p>
+              <p className="br-processing-message">Your transparent PNG is ready. Opening the comparison…</p>
+            </> : <>
+              <div className="br-processing-orbit" aria-hidden="true">
+                <span className="br-processing-halo"/>
+                <LoaderCircle className="br-processing-spinner" size={48} strokeWidth={2.2}/>
+                <Sparkles className="br-processing-center" size={19}/>
+              </div>
+              <p className="br-processing-title">{checking ? 'Checking your image' : 'AI is removing the background'}</p>
+              <p className="br-processing-message">{checking ? 'Validating the image format and dimensions…' : progress?.message || 'Preparing the AI model…'}</p>
+              <div className="br-progress-track" aria-hidden="true">
+                {processing && Number.isFinite(progress?.percent)
+                  ? <div className="br-progress-known" style={{width:`${progress.percent}%`}}/>
+                  : null}
+                <div className="br-progress-active" />
+              </div>
+              <p className="br-processing-note">
+                {processing ? 'This may take a while on CPU. Keep this page open.' : 'Preparing your photo…'}
+              </p>
+            </>}
           </div>
         </div>
       )}
