@@ -1,6 +1,6 @@
 import { getDb, highestAssigned } from '../database/db.js';
 import { FIXED_TERMS } from '../database/schema.js';
-import { formatInvoiceNo } from '../../shared/invoiceNumber.js';
+import { formatInvoiceNo, sequenceOf } from '../../shared/invoiceNumber.js';
 import { toPesos } from './money.js';
 import { buildWhere } from './filterBuilder.js';
 import { HttpError } from '../http.js';
@@ -147,29 +147,44 @@ async function syncSequence(prefix) {
   ], 'write');
 }
 
-// v.invoice_prefix (SI | SVI) chooses the sequence; v.invoice_no is never used. writes: validated custom values (see
-// customFieldService.validateValues). Number, invoice, items and values commit together.
+// Automatic numbers are assigned at save time. A manual override and its counter update are
+// committed with the invoice and its children in a single transaction.
 export async function create(v, writes = []) {
-  const now = new Date().toISOString(), prefix = v.invoice_prefix, ref = sequenceRef(prefix);
+  const now = new Date().toISOString(), prefix = v.invoice_prefix, manualNo = v.invoice_no || null;
+  const ref = manualNo ? { where: 'invoice_no = ?', args: [manualNo] } : sequenceRef(prefix);
+  const numberExpression = manualNo ? '?' : NUMBER_SQL;
+  const bump = manualNo
+    ? { sql: 'UPDATE invoice_sequences SET last_number = MAX(last_number, ?) WHERE prefix = ?', args: [sequenceOf(manualNo, prefix), prefix] }
+    : { sql: 'UPDATE invoice_sequences SET last_number = last_number + 1 WHERE prefix = ?', args: [prefix] };
   for (let attempt = 0; ; attempt++) {
     try {
       const results = await getDb().batch([
         { sql: 'INSERT OR IGNORE INTO invoice_sequences (prefix, last_number) VALUES (?, 0)', args: [prefix] },
-        { sql: 'UPDATE invoice_sequences SET last_number = last_number + 1 WHERE prefix = ?', args: [prefix] },
-        { sql: `INSERT INTO invoices (date_issued,invoice_no,terms,cr_no,client_name,client_tin,client_address,product_service,due_date,amount_centavos,amount_paid_centavos,payment_status,delivery_date,remarks,created_at,updated_at) VALUES (?,${NUMBER_SQL},?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, args: [v.date_issued, prefix, FIXED_TERMS, ...cols(v).slice(2), now, now] },
+        bump,
+        { sql: `INSERT INTO invoices (date_issued,invoice_no,terms,cr_no,client_name,client_tin,client_address,product_service,due_date,amount_centavos,amount_paid_centavos,payment_status,delivery_date,remarks,created_at,updated_at) VALUES (?,${numberExpression},?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, args: [v.date_issued, manualNo || prefix, FIXED_TERMS, ...cols(v).slice(2), now, now] },
         ...itemStatements(v.items, ref), ...valueStatements(writes, ref),
       ], 'write');
       return get(Number(results[2].lastInsertRowid));
     } catch (e) {
-      // The counter was behind a number already in use: the whole batch rolled back, so catch the counter up and try again.
-      if (attempt < 2 && /UNIQUE/i.test(e.message) && /invoice_no/i.test(e.message)) { await syncSequence(prefix); continue; }
+      // Manual collisions must fail rather than silently changing the number the user picked.
+      if (!manualNo && attempt < 2 && /UNIQUE/i.test(e.message) && /invoice_no/i.test(e.message)) { await syncSequence(prefix); continue; }
       throw e;
     }
   }
 }
-// An invoice keeps its number for life: v.invoice_no is the stored one (see validate.js), and terms is never written.
+// Edits preserve their original number unless explicitly overridden. The corresponding counter
+// only advances, and remains unchanged if an edit fails (including a duplicate-number collision).
 export async function update(id, v, writes = []) {
-  const [r] = await getDb().batch([{ sql: `UPDATE invoices SET date_issued=?,invoice_no=?,cr_no=?,client_name=?,client_tin=?,client_address=?,product_service=?,due_date=?,amount_centavos=?,amount_paid_centavos=?,payment_status=?,delivery_date=?,remarks=?,updated_at=? WHERE id=?`, args: [...cols(v), new Date().toISOString(), id] }, { sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] }, ...itemStatements(v.items, refById(id)), ...valueStatements(writes, refById(id))], 'write');
+  const sequenceWrites = v.invoice_number_changed ? [
+    { sql: 'INSERT OR IGNORE INTO invoice_sequences (prefix, last_number) VALUES (?, 0)', args: [v.invoice_prefix] },
+    { sql: 'UPDATE invoice_sequences SET last_number = MAX(last_number, ?) WHERE prefix = ?', args: [sequenceOf(v.invoice_no, v.invoice_prefix), v.invoice_prefix] },
+  ] : [];
+  const [r] = await getDb().batch([
+    { sql: `UPDATE invoices SET date_issued=?,invoice_no=?,cr_no=?,client_name=?,client_tin=?,client_address=?,product_service=?,due_date=?,amount_centavos=?,amount_paid_centavos=?,payment_status=?,delivery_date=?,remarks=?,updated_at=? WHERE id=?`, args: [...cols(v), new Date().toISOString(), id] },
+    ...sequenceWrites,
+    { sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] },
+    ...itemStatements(v.items, refById(id)), ...valueStatements(writes, refById(id)),
+  ], 'write');
   return r.rowsAffected ? get(id) : null;
 }
 export async function remove(id) {

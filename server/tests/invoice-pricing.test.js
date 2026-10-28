@@ -91,7 +91,7 @@ describe('validation', () => {
     expect(v({ items: [] }).errors.product_service).toBeTruthy();
     expect(v({ items: [item], invoice_prefix: 'SVI' }).errors).toEqual({});
     for (const bad of [undefined, '', 'VI', 'INV']) expect(v({ items: [item], invoice_prefix: bad }).errors.invoice_prefix).toBeTruthy();
-    expect(v({ items: [item], invoice_no: 'SI - 0100', terms: '60-days' }).value).toMatchObject({ invoice_no: '', terms: '30-days' }); // never taken from the request
+    expect(v({ items: [item], invoice_prefix: 'SI', invoice_no: 'SI - 0100', terms: '60-days' }).value).toMatchObject({ invoice_no: 'SI - 0100', terms: '30-days' });
   });
 });
 
@@ -164,18 +164,42 @@ describe('invoice API: SI / SVI running numbers and fixed terms', () => {
     for (const bad of [undefined, '', 'VI', 'SIX']) { const r = await post(bad); expect(r.status).toBe(422); expect(r.body.error.fields.invoice_prefix).toBeTruthy(); }
     expect((await call('POST', '/api/invoices/next-number', {})).status).toBe(404);
   });
-  it('ignores a submitted invoice number and terms on create', async () => {
-    const want = await next('SI');
-    const r = await post('SI', { invoice_no: 'SI - 0001', terms: 'COD' });
-    expect(r.status).toBe(201); expect(r.body.invoice_no).toBe(want); expect(r.body.terms).toBe('30-days');
-    expect((await post('SVI', { invoice_no: 'SI - 0500' })).body.invoice_no.startsWith('SVI - ')).toBe(true);
+  it('accepts a manually chosen number, advances only its sequence, and keeps terms fixed', async () => {
+    const before = await seqRow('SI'), svi = await seqRow('SVI'), number = formatInvoiceNo('SI', before + 50);
+    const r = await post('SI', { invoice_no: number, terms: 'COD' });
+    expect(r.status).toBe(201); expect(r.body.invoice_no).toBe(number); expect(r.body.terms).toBe('30-days');
+    expect(await seqRow('SI')).toBe(before + 50); expect(await seqRow('SVI')).toBe(svi);
+    expect(await next('SI')).toBe(formatInvoiceNo('SI', before + 51));
   });
-  it('an invoice keeps its number and terms for life: edits cannot change them', async () => {
-    const c = await post('SVI'), no = c.body.invoice_no;
-    const u = await PUT(`/api/invoices/${c.body.id}`, { ...base, items: one, invoice_prefix: 'SI', invoice_no: 'SI - 0001', terms: '90-days', remarks: 'edited' });
-    expect(u.status).toBe(200); expect(u.body.invoice_no).toBe(no); expect(u.body.terms).toBe('30-days'); expect(u.body.remarks).toBe('edited');
-    const noPrefix = await PUT(`/api/invoices/${c.body.id}`, { ...base, items: one });
-    expect(noPrefix.status).toBe(200); expect(noPrefix.body.invoice_no).toBe(no);
+  it('allows changing an existing SI/SVI number without changing its type', async () => {
+    const c = await post('SVI'), no = c.body.invoice_no, custom = formatInvoiceNo('SVI', (await seqRow('SVI')) + 30);
+    const u = await PUT(`/api/invoices/${c.body.id}`, { ...base, items: one, invoice_prefix: 'SI', invoice_no: custom, terms: '90-days', remarks: 'edited' });
+    expect(u.status).toBe(200); expect(u.body.invoice_no).toBe(custom); expect(u.body.terms).toBe('30-days'); expect(u.body.remarks).toBe('edited');
+    expect(await next('SVI')).toBe(formatInvoiceNo('SVI', sequenceOf(custom, 'SVI') + 1));
+    const unchanged = await PUT(`/api/invoices/${c.body.id}`, { ...base, items: one });
+    expect(unchanged.status).toBe(200); expect(unchanged.body.invoice_no).toBe(custom);
+    expect(no).not.toBe(custom);
+  });
+  it('rejects duplicate, mismatched, empty and invalid numbers', async () => {
+    const a = await post('SI'), b = await post('SI'), before = await seqRow('SI');
+    const duplicate = await post('SI', { invoice_no: a.body.invoice_no });
+    expect(duplicate.status).toBe(409); expect(duplicate.body.error.fields.invoice_no).toBeTruthy();
+    const editDuplicate = await PUT(`/api/invoices/${b.body.id}`, { ...base, items: one, invoice_no: a.body.invoice_no });
+    expect(editDuplicate.status).toBe(409); expect((await GET(`/api/invoices/${b.body.id}`)).body.invoice_no).toBe(b.body.invoice_no);
+    for (const invoice_no of ['SI - 0000', 'SI - abc', 'SVI - 9999', 'SI - 1.5', 'SI - 9007199254740993', '']) {
+      const r = await post('SI', { invoice_no });
+      expect(r.status).toBe(422); expect(r.body.error.fields.invoice_no).toBeTruthy();
+    }
+    expect(await seqRow('SI')).toBe(before);
+  });
+  it('a lower manual number does not reset the high-water mark for automatic allocation', async () => {
+    const before = await seqRow('SI');
+    const high = await post('SI', { invoice_no: formatInvoiceNo('SI', before + 3) });
+    expect(high.status).toBe(201);
+    const gap = await post('SI', { invoice_no: formatInvoiceNo('SI', before + 1) });
+    expect(gap.status).toBe(201);
+    expect(await seqRow('SI')).toBe(before + 3);
+    expect((await post('SI')).body.invoice_no).toBe(formatInvoiceNo('SI', before + 4));
   });
   it('never reuses a number after its invoice is deleted or cancelled', async () => {
     const x = await post('SVI'), y = await post('SVI');

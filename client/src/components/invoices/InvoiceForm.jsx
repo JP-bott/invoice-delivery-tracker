@@ -47,8 +47,11 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
       .catch(() => current && setSuggested({ prefix: form.invoice_prefix, number: '', failed: true }));
     return () => { current = false; };
   }, [isNew, form.invoice_prefix]);
-  const shownNo = isNew ? (suggested.prefix === form.invoice_prefix ? suggested.number : '') : form.invoice_no || '';
-  const shownNumber = splitInvoiceNo(shownNo).number;
+  const originalNo = isNew ? (suggested.prefix === form.invoice_prefix ? suggested.number : '') : form.invoice_no || '';
+  const hasOverride = form.invoice_number_override != null;
+  const shownNumber = hasOverride ? form.invoice_number_override : splitInvoiceNo(originalNo).number;
+  const shownNo = hasOverride ? `${form.invoice_prefix} - ${shownNumber}` : originalNo;
+  const editableNumber = isNew || PREFIXES.includes(form.invoice_prefix);
   const error = (key) => errs[key] && <span id={`invoice-${key}-error`} role="alert" className="mt-1 block text-xs font-normal text-danger-ink">{errs[key]}</span>;
   const star = (key) => required.has(key) ? <span className="ml-0.5 text-danger" aria-hidden="true">*</span> : <span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span>;
   const setCustom = (id, value) => setForm({ ...form, custom_fields: { ...(form.custom_fields || {}), [id]: value } });
@@ -134,17 +137,18 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
         <Group id="invoice-details-heading" title="Invoice details" description="Identify the transaction.">
           {field('date_issued', 'Date Issued', 'date')}
           <div className="label">
-            <label htmlFor="invoice_number" className="mb-1.5 block">Invoice No.<span className="ml-1.5 text-xs font-normal text-fg-subtle">Assigned automatically</span></label>
+            <label htmlFor="invoice_number" className="mb-1.5 block">Invoice No.<span className="ml-1.5 text-xs font-normal text-fg-subtle">{isNew ? 'Auto-suggested, editable' : 'Editable number'}</span></label>
             <span className="flex">
-              <select aria-label="Invoice type" disabled={!isNew} className="input !w-auto rounded-r-none border-r-0 bg-surface-2 font-medium" value={form.invoice_prefix} onChange={set('invoice_prefix')}>
+              <select aria-label="Invoice type" disabled={!isNew || saving} className="input !w-auto rounded-r-none border-r-0 bg-surface-2 font-medium" value={form.invoice_prefix} onChange={(event) => setForm({ ...form, invoice_prefix: event.target.value, invoice_number_override: null })}>
                 {PREFIXES.map((p) => <option key={p} value={p}>{p}</option>)}
                 {!PREFIXES.includes(form.invoice_prefix) && <option value={form.invoice_prefix}>{form.invoice_prefix || 'None'} (current)</option>}
               </select>
-              <input id="invoice_number" type="text" readOnly tabIndex={-1} aria-readonly="true" aria-invalid={Boolean(errs.invoice_no || errs.invoice_prefix)} aria-describedby="invoice-number-note" className={`${cls('invoice_no')} num rounded-l-none bg-surface-2 text-fg-muted`} value={shownNumber} placeholder={isNew && !suggested.failed ? 'Loading…' : ''} />
+              <input id="invoice_number" type="text" inputMode="numeric" autoComplete="off" disabled={!editableNumber || saving} aria-invalid={Boolean(errs.invoice_no || errs.invoice_prefix)} aria-describedby="invoice-number-note" className={`${cls('invoice_no')} num min-w-0 rounded-l-none`} value={shownNumber} onChange={(event) => setForm({ ...form, invoice_number_override: event.target.value })} placeholder={isNew && !suggested.failed ? 'Loading…' : isNew ? 'Assigned on save' : ''} />
             </span>
             {error('invoice_no')}{error('invoice_prefix')}
+            {hasOverride && editableNumber && <button type="button" disabled={saving} className="mt-1 text-xs font-medium text-fg underline underline-offset-2 hover:text-fg-muted" onClick={() => setForm({ ...form, invoice_number_override: null })}>{isNew ? 'Use automatic number' : 'Restore saved number'}</button>}
             <span id="invoice-number-note" className="mt-1 block text-xs font-normal text-fg-muted" role="status">
-              {isNew ? (suggested.failed ? <span className="text-warning-ink">Could not load the next number; one is still assigned when you save.</span> : 'Next number for this type. The final number is confirmed when the invoice is saved.') : 'An invoice keeps its number.'}
+              {!editableNumber ? 'Legacy invoice number is preserved.' : hasOverride ? 'Custom number: digits only. Duplicate numbers cannot be saved.' : isNew ? (suggested.failed ? <span className="text-warning-ink">Could not load the suggestion. The number will be assigned automatically on save.</span> : 'Automatic number is based on the latest saved number. It is confirmed on save.') : 'The number is unchanged unless you edit it. The invoice type stays fixed.'}
             </span>
           </div>
           {field('cr_no', 'CR No.')}
