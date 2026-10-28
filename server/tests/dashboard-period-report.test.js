@@ -72,6 +72,9 @@ describe('dashboard period filter regression',()=>{
     const page=readFileSync(new URL('../../client/src/pages/Dashboard.jsx',import.meta.url),'utf8');
     const constants=readFileSync(new URL('../../client/src/utils/constants.js',import.meta.url),'utf8');
     expect(page).toContain("const VALID=['month','quarter','year']");
+    expect(page).toContain('aria-label="Date range"');
+    expect(page).toContain('filterDefs.filter(f=>f.enabled)');
+    expect(page).toContain('range:selected,...active');
     expect(page).not.toContain('Custom Range');
     expect(page).not.toContain('Last 7 Days');
     expect(page).not.toContain('All Time');
