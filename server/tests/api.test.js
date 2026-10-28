@@ -12,7 +12,7 @@ beforeAll(async () => {
 });
 const call = (method, url, body) => { const u = new URL(url, 'http://x'); return handle({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body }); };
 const GET = (u) => call('GET', u); const POST = (u, b) => call('POST', u, b); const PUT = (u, b) => call('PUT', u, b); const DEL = (u) => call('DELETE', u);
-const base = { date_issued: '2026-10-01', invoice_prefix: 'SVI', invoice_no: 'INV-001', client_name: 'A', product_service: 'P', amount: 1250.75, payment_status: 'Pending', amount_paid: 0 };
+const base = { date_issued: '2026-10-01', invoice_prefix: 'SVI', client_name: 'A', product_service: 'P', amount: 1250.75, payment_status: 'Pending', amount_paid: 0 };
 
 describe('money', () => {
   it('converts safely', () => { expect(toCentavos(1250.75)).toBe(125075); expect(toCentavos('0.1')).toBe(10); });
@@ -39,14 +39,14 @@ describe('validation', () => {
   it('rejects impossible dates', () => expect(v({ delivery_date: '2026-02-30' }).delivery_date).toBeTruthy());
 });
 describe('invoices API', () => {
-  it('CRUD; client-supplied numbers and terms are ignored', async () => {
+  it('CRUD; automatic and manually edited numbers work while terms stay fixed', async () => {
     const c = await POST('/api/invoices', base); expect(c.status).toBe(201);
     expect(c.body.invoice_no).toBe('SVI - 0001'); expect(c.body.terms).toBe('30-days');
     expect(c.body.outstanding).toBe(1250.75); expect(c.body.deliveryStatus).toBe('Pending');
-    const o = await POST('/api/invoices', { ...base, invoice_no: 'SVI - 0001', terms: '60-days' });
-    expect(o.status).toBe(201); expect(o.body.invoice_no).toBe('SVI - 0002'); expect(o.body.terms).toBe('30-days');
-    const u = await PUT(`/api/invoices/${o.body.id}`, { ...base, invoice_no: 'SVI - 0001', terms: 'COD' });
-    expect(u.status).toBe(200); expect(u.body.invoice_no).toBe('SVI - 0002'); expect(u.body.terms).toBe('30-days');
+    const o = await POST('/api/invoices', { ...base, invoice_no: 'SVI - 0020', terms: '60-days' });
+    expect(o.status).toBe(201); expect(o.body.invoice_no).toBe('SVI - 0020'); expect(o.body.terms).toBe('30-days');
+    const u = await PUT(`/api/invoices/${o.body.id}`, { ...base, invoice_no: 'SVI - 0025', terms: 'COD' });
+    expect(u.status).toBe(200); expect(u.body.invoice_no).toBe('SVI - 0025'); expect(u.body.terms).toBe('30-days');
     expect((await GET('/api/invoices/9999')).status).toBe(404);
     expect((await DEL(`/api/invoices/${o.body.id}`)).status).toBe(204);
   });
