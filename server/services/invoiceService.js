@@ -104,7 +104,7 @@ async function withCustom(apiRows, fields) {
 async function withItems(apiRows) {
   if (!apiRows.length) return apiRows;
   const ids = apiRows.map((r) => r.id);
-  const rows = (await getDb().execute({ sql: `SELECT invoice_id, product_service, quantity, unit_cost_centavos, amount_centavos FROM invoice_items WHERE invoice_id IN (${ids.map(() => '?').join(',')}) ORDER BY invoice_id, position, id`, args: ids })).rows;
+  const rows = (await getDb().execute({ sql: `SELECT invoice_id, product_service, description, quantity, unit_cost_centavos, amount_centavos FROM invoice_items WHERE invoice_id IN (${ids.map(() => '?').join(',')}) ORDER BY invoice_id, position, id`, args: ids })).rows;
   const by = new Map();
   for (const x of rows) { const k = Number(x.invoice_id); if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
   return apiRows.map((r) => {
@@ -112,7 +112,7 @@ async function withItems(apiRows) {
     if (!list) return { ...r, items: [{ product_service: r.product_service, quantity: 1, unit_cost: r.amount, amount: r.amount }] };
     return { ...r, items: list.map((x) => {
       const priced = x.unit_cost_centavos != null && x.amount_centavos != null;
-      return { product_service: x.product_service, quantity: Number(x.quantity), unit_cost: priced ? toPesos(Number(x.unit_cost_centavos)) : null, amount: priced ? toPesos(Number(x.amount_centavos)) : list.length === 1 ? r.amount : null };
+      return { product_service: x.product_service, ...(x.description ? { description: x.description } : {}), quantity: Number(x.quantity), unit_cost: priced ? toPesos(Number(x.unit_cost_centavos)) : null, amount: priced ? toPesos(Number(x.amount_centavos)) : list.length === 1 ? r.amount : null };
     }) };
   });
 }
@@ -121,7 +121,7 @@ export async function get(id) {
   return r ? (await withItems(await withCustom([toApi(r)], await activeFields())))[0] : null;
 }
 const cols = (v) => [v.date_issued, v.invoice_no, v.cr_no, v.client_name, v.client_tin, v.client_address, v.product_service, v.due_date, v.amount_centavos, v.amount_paid_centavos, v.payment_status, v.delivery_date, v.remarks];
-const itemStatements = (items, ref) => items.map((it, i) => ({ sql: `INSERT INTO invoice_items (invoice_id, position, product_service, quantity, unit_cost_centavos, amount_centavos) SELECT id, ?, ?, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [i, it.product_service, it.quantity, it.unit_cost_centavos, it.amount_centavos, ...ref.args] }));
+const itemStatements = (items, ref) => items.map((it, i) => ({ sql: `INSERT INTO invoice_items (invoice_id, position, product_service, quantity, unit_cost_centavos, amount_centavos, description) SELECT id, ?, ?, ?, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [i, it.product_service, it.quantity, it.unit_cost_centavos, it.amount_centavos, it.description || '', ...ref.args] }));
 
 // ---- Invoice numbers ------------------------------------------------------------------------------------------------------
 // invoice_sequences.last_number is the last number ever assigned per type and only moves forward, so a deleted, cancelled or voided

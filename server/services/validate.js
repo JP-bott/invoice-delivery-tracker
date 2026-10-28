@@ -19,12 +19,13 @@ function cleanItems(b, e, t) {
   if (raw.length > MAX_ITEMS) { e.product_service = `At most ${MAX_ITEMS} items per invoice`; return { items: [], amount: null }; }
   const priced = priceItems(raw.map((it) => ({ unit_cost: it?.unit_cost, quantity: it?.quantity })));
   const items = raw.map((it, i) => {
-    const name = t(it?.product_service), line = priced.lines[i];
+    const name = t(it?.product_service), description = t(it?.description), line = priced.lines[i];
     if (!name) e[`items_${i}_product_service`] = 'Required';
     else if (name.length > 200) e[`items_${i}_product_service`] = 'Must be 200 characters or fewer';
+    if (description.length > 500) e[`items_${i}_description`] = 'Must be 500 characters or fewer';
     if (line.errors.unit_cost) e[`items_${i}_unit_cost`] = line.errors.unit_cost;
     if (line.errors.quantity) e[`items_${i}_quantity`] = line.errors.quantity;
-    return { product_service: name, quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000, unit_cost_centavos: line.unit, amount_centavos: line.amount };
+    return { product_service: name, ...(description ? { description } : {}), quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000, unit_cost_centavos: line.unit, amount_centavos: line.amount };
   });
   if (b.items == null && e.items_0_unit_cost) e.amount = 'Valid amount required (max 2 decimals)';
   return { items, amount: priced.ok ? priced.subtotal : null };
