@@ -31,23 +31,23 @@ export const handlers = {
   // Date-scoped dashboard. Amounts are saved VAT-inclusive invoice totals;
   // payment collections reflect currently recorded amounts, not payment dates.
   async 'period-report'(q) {
-    const b = dashboardBounds(q.range || 'month', q.asOf || manilaToday());
-    const invoices = await run(`SELECT * FROM invoices WHERE payment_status <> 'Cancelled'
-      AND date_issued >= ? AND date_issued <= ? ORDER BY date_issued DESC, id DESC`, [b.from, b.to]);
+    const b = dashboardBounds(q.range || 'month', manilaToday());
+    const base = f({ ...q, range: undefined, asOf: undefined, dateFrom: undefined, dateTo: undefined });
+    const conditions = `${base.where ? base.where + ' AND' : 'WHERE'} payment_status <> 'Cancelled' AND date_issued >= ? AND date_issued <= ?`;
+    const args = [...base.args, b.from, b.to];
+    const invoices = await run(`SELECT * FROM invoices ${conditions} ORDER BY date_issued DESC, id DESC`, args);
     let lineItems = [];
     if (invoices.length) {
-      // Range constrained join: never duplicate invoice totals per item.
+      // Same filter scope as invoice query; no duplicate invoice totals per item.
       lineItems = await run(`SELECT ii.invoice_id, ii.product_service, ii.quantity, ii.amount_centavos
-        FROM invoice_items ii JOIN invoices inv ON inv.id = ii.invoice_id
-        WHERE inv.payment_status <> 'Cancelled' AND inv.date_issued >= ?
-          AND inv.date_issued <= ? ORDER BY ii.invoice_id, ii.position`, [b.from, b.to]);
+        FROM invoice_items ii JOIN invoices ON invoices.id = ii.invoice_id
+        ${conditions} ORDER BY ii.invoice_id, ii.position`, args);
     }
     let previous = 0;
     if (b.range === 'quarter') {
-      const rows = await run(`SELECT COALESCE(SUM(amount_centavos),0) AS total
-        FROM invoices WHERE payment_status <> 'Cancelled'
-        AND date_issued >= ? AND date_issued <= ?`,
-        [b.previousQuarter.from,b.previousQuarter.to]);
+      const prior = `${base.where ? base.where + ' AND' : 'WHERE'} payment_status <> 'Cancelled' AND date_issued >= ? AND date_issued <= ?`;
+      const rows = await run(`SELECT COALESCE(SUM(amount_centavos),0) AS total FROM invoices ${prior}`,
+        [...base.args,b.previousQuarter.from,b.previousQuarter.to]);
       previous = Number(rows[0]?.total || 0);
     }
     return aggregateDashboard(invoices,lineItems,b,previous);
