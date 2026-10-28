@@ -109,7 +109,7 @@ export function buildInvoiceWorkbook(invoices, fields = [], generatedAt = new Da
  const itemRows=active.flatMap(x=>(x.items||[]).map((item,i)=>[
   safeText(x.invoice_no),numCell(x.id),numCell(i+1),safeText(x.client_name),safeText(item.product_service),numCell(item.quantity),
   item.unit_cost==null?textCell('Not recorded'):numCell(item.unit_cost),
-  item.amount==null?textCell('Not recorded'):numCell(item.amount),safeText(x.payment_status)
+  item.amount==null?textCell('Not recorded'):numCell(item.amount),safeText(x.payment_status),safeText(item.description)
  ]));
  const customRows=active.flatMap(x=>fields.filter(f=>x.custom_fields?.[f.id]!=null).map(f=>[
   safeText(x.invoice_no),safeText(f.label),safeText(f.input_type),safeText(x.custom_fields[f.id]),safeText(f.archived?'Archived':'Active')
@@ -131,7 +131,7 @@ export function buildInvoiceWorkbook(invoices, fields = [], generatedAt = new Da
  ['Source','Invoice & Delivery Tracker','Saved database values at export time']
  ],[30,28,58],[1]);
  const register=sheet('Invoice Register',headers,invoiceRows,[19,17,27,19,42,17,40,13,17,20,20,20,19,17,19,46,13,27,27,...fields.map(()=>23)],[9,10,11],[1,8,13],[12,14]);
- const items=sheet('Line Items',['Invoice No.','Record ID','Line #','Client','Product / Service','Quantity','Unit Cost (PHP)','Line Amount (PHP)','Payment Status'],itemRows,[20,13,12,27,38,14,20,22,21],[6,7],[],[8]);
+ const items=sheet('Line Items',['Invoice No.','Record ID','Line #','Client','Product / Service','Quantity','Unit Cost (PHP)','Line Amount (PHP)','Payment Status','Product Description'],itemRows,[20,13,12,27,38,14,20,22,21,48],[6,7],[],[8]);
  const customs=sheet('Custom Fields',['Invoice No.','Field','Field Type','Saved Value','Field Availability'],customRows,[20,30,19,48,24]);
  const history=sheet('Payment History',['Invoice No.','Client','Stage','Tone','Progress Note','Created At (UTC)','Updated At (UTC)','Event ID'],timelineRows,[20,27,31,18,65,28,28,14]);
  return makeXlsx([summary,register,items,customs,history]);
