@@ -19,7 +19,7 @@ import { blankItem, deriveUnitCost } from '../utils/items.js';
 import { splitInvoiceNo } from '../utils/invoiceNo.js';
 
 const newForm = () => ({ ...blank, items: [blankItem()], custom_fields: {} });
-const blank = { date_issued: '', invoice_prefix: 'SVI', cr_no: '', client_name: '', client_tin: '', client_address: '', items: [blankItem()], payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '', custom_fields: {} };
+const blank = { date_issued: '', invoice_prefix: 'SVI', invoice_number_override: null, cr_no: '', client_name: '', client_tin: '', client_address: '', items: [blankItem()], payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '', custom_fields: {} };
 const noFilters = { q: '', dateFrom: '', dateTo: '', client: '', product: '', paymentStatus: '', deliveryStatus: '' };
 // Built-in filters plus any custom-field filters in the URL (cf_<id>).
 const filtersFromParams = (params) => Object.fromEntries([...Object.keys(noFilters), ...[...params.keys()].filter(isCustomFilterKey)].map((key) => [key, params.get(key) || '']));
@@ -102,10 +102,11 @@ export default function Invoices() {
     if (saving) return;
     setSaving(true);
     try {
-      // The server derives the amount from the items, assigns the invoice number and applies the fixed terms: a new invoice sends only its
-      // type (SI / SVI); the number and terms shown in the form are display-only and never sent.
-      const { amount, invoice_no, terms, due_date, ...rest } = form;
-      const body = form.id ? { ...rest, invoice_prefix: undefined } : rest;
+      // Only intentionally edited invoice numbers are sent. Otherwise, the backend assigns the
+      // next number on create or retains the stored number on update.
+      const { amount, invoice_no, invoice_number_override, terms, due_date, ...rest } = form;
+      const manual = invoice_number_override == null ? {} : { invoice_no: `${form.invoice_prefix} - ${invoice_number_override}` };
+      const body = form.id ? { ...rest, invoice_prefix: undefined, ...manual } : { ...rest, ...manual };
       const saved = await api(form.id ? `/api/invoices/${form.id}` : '/api/invoices', { method: form.id ? 'PUT' : 'POST', body });
       const wasEdit = Boolean(form.id);
       setForm(null); setErrs({}); toast.success(wasEdit ? 'Invoice updated' : `Invoice ${saved.invoice_no} created`); load();
@@ -118,7 +119,7 @@ export default function Invoices() {
     setDeleting(false); setDel(null);
   };
   const openAdd = () => { reloadFields(); loadClients(); setForm(newForm()); setErrs({}); };
-  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', client_tin: r.client_tin ?? '', client_address: r.client_address ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', items: editItems(r), custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); loadClients(); setErrs({}); };
+  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), invoice_number_override: null, amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', client_tin: r.client_tin ?? '', client_address: r.client_address ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', items: editItems(r), custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); loadClients(); setErrs({}); };
   const onSort = (k) => setSort({ sortBy: k, sortDir: sort.sortBy === k && sort.sortDir === 'asc' ? 'desc' : 'asc' });
   const clearFilters = () => { setF(noFilters); setSearchParams({}); };
   const filtered = Object.keys(dq).some((k) => dq[k]);
