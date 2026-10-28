@@ -17,9 +17,10 @@ let region, rush;
 describe('dashboard filter settings', () => {
   it('defaults to Client and Product/Service, as before', async () => {
     const r = await GET('/api/dashboard-filters');
-    expect(r.body.filters.map((f) => [f.key, f.enabled])).toEqual([['client', true], ['product', true], ['paymentStatus', false], ['deliveryStatus', false]]);
+    expect(r.body.filters.map((f) => [f.key, f.enabled])).toEqual([['dateRange', true], ['client', true], ['product', true], ['paymentStatus', false], ['deliveryStatus', false]]);
     expect(r.body.max_enabled).toBe(8);
   });
+  it('keeps date range mandatory even when settings try to hide it',async()=>{const list=await filters();const after=(await save(list.map(f=>({...f,enabled:false})))).body.filters;expect(after.find(f=>f.key==='dateRange')).toMatchObject({enabled:true,required:true,control:'select'});expect(after.find(f=>f.key==='dateRange').options.map(x=>x.value)).toEqual(['month','quarter','year']);});
   it('lists custom invoice fields as filters, off by default, with the right control', async () => {
     region = (await POST('/api/invoice-fields', { label: 'Region', input_type: 'dropdown', options: ['North', 'South', 'East'] })).body;
     rush = (await POST('/api/invoice-fields', { label: 'Rush', input_type: 'checkbox' })).body;
@@ -36,7 +37,7 @@ describe('dashboard filter settings', () => {
     expect((await save(next)).status).toBe(200);
     const after = await filters();
     expect(after.slice(0, 2).map((f) => f.key)).toEqual(want);
-    expect(after.filter((f) => f.enabled).map((f) => f.key)).toEqual(want);
+    expect(after.filter((f) => f.enabled).map((f) => f.key)).toEqual([...want,'dateRange']);
   });
   it('validates the request and ignores unknown keys', async () => {
     expect((await PUT('/api/dashboard-filters', {})).status).toBe(422);

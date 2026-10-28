@@ -1,5 +1,5 @@
 // Which fields appear as filters on the Dashboard, and in what order (Settings > Dashboard filters).
-// Stored as one JSON value in schema_meta (no new table). Date range is always shown and is not part of this list.
+// Stored as one JSON value in schema_meta (no new table). Date range is mandatory but participates in the saved display order.
 // Available filters = four built-ins + every active custom invoice field. A field that is archived drops out of the
 // list and returns, with its saved on/off state, when restored. Nothing here changes any invoice data.
 import { getDb } from '../database/db.js';
@@ -8,11 +8,13 @@ import { activeFields } from './customFieldService.js';
 
 const KEY = 'dashboard_filters';
 export const MAX_ENABLED = 8;
-const DEFAULT_ENABLED = ['client', 'product']; // what the dashboard has always offered
+const DEFAULT_ENABLED = ['dateRange', 'client', 'product'];
+const MANDATORY = 'dateRange'; // what the dashboard has always offered
 const bad = (message) => new HttpError(422, message, 'VALIDATION_ERROR');
 
 // Cancelled is left out of the payment options: the dashboard excludes cancelled invoices by design.
 const BUILTIN = [
+  { key: 'dateRange', label: 'Date range', aria_label: 'Date range', control: 'select', required: true, options: [{ value:'month',label:'This Month' },{ value:'quarter',label:'This Quarter' },{ value:'year',label:'This Year' }] },
   { key: 'client', label: 'Client', aria_label: 'Client', control: 'select', source: 'clients', all_label: 'All clients' },
   { key: 'product', label: 'Product/Service', aria_label: 'Product or service', control: 'select', source: 'products', all_label: 'All products' },
   { key: 'paymentStatus', label: 'Payment status', aria_label: 'Payment status', control: 'select', all_label: 'All payments',
@@ -46,6 +48,7 @@ export async function get() {
   const saved = [...new Set(cfg?.order ?? [])].filter((k) => byKey.has(k));
   const order = [...saved, ...defs.map((d) => d.key).filter((k) => !saved.includes(k))];
   const enabled = new Set(cfg ? cfg.enabled : DEFAULT_ENABLED);
+  enabled.add(MANDATORY);
   return { max_enabled: MAX_ENABLED, filters: order.map((k) => ({ ...byKey.get(k), enabled: enabled.has(k) })) };
 }
 
@@ -60,9 +63,9 @@ export async function save(body) {
   for (const item of list) {
     if (typeof item?.key !== 'string' || typeof item.enabled !== 'boolean') throw bad('Each filter needs a key and an enabled flag');
     if (!known.has(item.key) || seen.has(item.key)) continue;
-    seen.add(item.key); order.push(item.key); if (item.enabled) enabled.push(item.key);
+    seen.add(item.key); order.push(item.key); if (item.enabled || item.key === MANDATORY) enabled.push(item.key);
   }
-  for (const f of current) if (!seen.has(f.key)) { order.push(f.key); if (f.enabled) enabled.push(f.key); }
+  for (const f of current) if (!seen.has(f.key)) { order.push(f.key); if (f.enabled || f.key === MANDATORY) enabled.push(f.key); }
   if (enabled.length > MAX_ENABLED) throw bad(`Choose at most ${MAX_ENABLED} dashboard filters`);
   await getDb().execute({ sql: 'INSERT INTO schema_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', args: [KEY, JSON.stringify({ order, enabled })] });
   return get();
