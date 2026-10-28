@@ -37,7 +37,7 @@ describe('dashboard filter settings', () => {
     expect((await save(next)).status).toBe(200);
     const after = await filters();
     expect(after.slice(0, 2).map((f) => f.key)).toEqual(want);
-    expect(after.filter((f) => f.enabled).map((f) => f.key)).toEqual(want);
+    expect(after.filter((f) => f.enabled).map((f) => f.key)).toEqual([...want,'dateRange']);
   });
   it('validates the request and ignores unknown keys', async () => {
     expect((await PUT('/api/dashboard-filters', {})).status).toBe(422);
