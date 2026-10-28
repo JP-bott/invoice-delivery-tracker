@@ -40,8 +40,8 @@ export const handlers = {
     if (invoices.length) {
       // Same filter scope as invoice query; no duplicate invoice totals per item.
       lineItems = await run(`SELECT ii.invoice_id, ii.product_service, ii.quantity, ii.amount_centavos
-        FROM invoice_items ii JOIN invoices ON invoices.id = ii.invoice_id
-        ${conditions} ORDER BY ii.invoice_id, ii.position`, args);
+        FROM invoice_items ii JOIN (SELECT id FROM invoices ${conditions}) scoped ON scoped.id = ii.invoice_id
+        ORDER BY ii.invoice_id, ii.position`, args);
     }
     let previous = 0;
     if (b.range === 'quarter') {
