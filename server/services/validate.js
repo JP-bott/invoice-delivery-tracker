@@ -1,5 +1,5 @@
 import { toCentavos } from './money.js';
-import { isInvoicePrefix } from '../../shared/invoiceNumber.js';
+import { formatInvoiceNo, isInvoicePrefix, splitInvoiceNo } from '../../shared/invoiceNumber.js';
 import { FIXED_TERMS } from '../database/schema.js';
 import { MAX_ITEMS, priceItems } from '../../shared/pricing.js';
 import { dueDateFromDelivery } from '../../shared/dueDate.js';
@@ -43,10 +43,9 @@ function cleanClientDetails(b, e, existing) {
   return { client_tin: one('client_tin', CLIENT_TIN_MAX, 'TIN'), client_address: one('client_address', CLIENT_ADDRESS_MAX, 'Address') };
 }
 
-// Invoice numbers and terms are never taken from the request. A new invoice only chooses its type (b.invoice_prefix: SI or SVI);
-// the number itself is assigned by the server when it is saved (invoiceService.create). An existing invoice keeps its stored number
-// (ctx.existingInvoiceNo, including older formats like "VI00123") whatever the request says. Terms are always 30-days.
-// ctx.existing: the stored invoice on update (supplies the client TIN/address when the request omits them).
+// Without an explicit invoice_no, a new invoice is numbered automatically and an edit retains the saved number.
+// The user can override its numeric part, but the SI/SVI type is fixed on edits. Terms remain fixed at 30-days.
+// ctx.existing: the saved invoice on update (also supplies client details when omitted).
 export function validateInvoice(b = {}, ctx = {}) {
   const e = {}, t = (x) => (typeof x === 'string' ? x.trim() : '');
   const v = {
@@ -56,9 +55,27 @@ export function validateInvoice(b = {}, ctx = {}) {
   };
   if (!dateOk(v.date_issued)) e.date_issued = 'Valid date required';
   v.terms = FIXED_TERMS;
-  if (ctx.existingInvoiceNo) v.invoice_no = ctx.existingInvoiceNo;
-  else if (isInvoicePrefix(b.invoice_prefix)) v.invoice_prefix = b.invoice_prefix.trim().toUpperCase();
+  if (ctx.existingInvoiceNo) {
+    v.invoice_no = ctx.existingInvoiceNo;
+    const existingPrefix = splitInvoiceNo(ctx.existingInvoiceNo).prefix;
+    if (isInvoicePrefix(existingPrefix)) v.invoice_prefix = existingPrefix;
+  } else if (isInvoicePrefix(b.invoice_prefix)) v.invoice_prefix = b.invoice_prefix.trim().toUpperCase();
   else e.invoice_prefix = 'Choose SI or SVI';
+
+  // Omitted invoice_no preserves automatic allocation on create, or the existing value on edit.
+  // A user-entered blank/invalid number must fail rather than silently switching back to automatic.
+  if (b.invoice_no !== undefined && b.invoice_no !== null) {
+    const match = /^(SI|SVI)\s*-\s*(\d+)$/i.exec(t(b.invoice_no));
+    const n = match ? Number(match[2]) : NaN;
+    if (!match || !Number.isSafeInteger(n) || n <= 0) {
+      e.invoice_no = 'Use a positive whole number (for example, SI - 0025)';
+    } else if (!v.invoice_prefix || match[1].toUpperCase() !== v.invoice_prefix) {
+      e.invoice_no = ctx.existingInvoiceNo ? 'Invoice type cannot be changed' : 'Number must match the selected invoice type';
+    } else {
+      v.invoice_no = formatInvoiceNo(v.invoice_prefix, n);
+      v.invoice_number_changed = Boolean(ctx.existingInvoiceNo && v.invoice_no !== ctx.existingInvoiceNo);
+    }
+  }
   if (!v.client_name) e.client_name = 'Required';
   Object.assign(v, cleanClientDetails(b, e, ctx.existing));
   const priced = cleanItems(b, e, t);
