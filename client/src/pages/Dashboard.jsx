@@ -11,6 +11,13 @@ import ChartCard from '../components/dashboard/ChartCard.jsx';
 import { EmptyState, PageHeader, Skeleton } from '../components/ui.jsx';
 
 const VALID=['month','quarter','year'];
+const defaultFilters=[{key:'dateRange',label:'Date range',enabled:true,required:true,control:'select',options:VALID.map(value=>({value,label:value}))}];
+const filterOptions=(def,opts)=>def.source?(opts[def.source]||[]).map(value=>({value,label:value})):def.options||[];
+function DashboardFilter({def,value,onChange,opts,bounds}) {
+ if(def.key==='dateRange')return <select aria-label="Date range" className="input !w-auto min-w-44" value={value} onChange={e=>onChange(e.target.value)}><option value="month">This Month</option><option value="quarter">This Quarter – Q{bounds.quarter}</option><option value="year">This Year</option></select>;
+ if(def.control==='select')return <select aria-label={def.aria_label||def.label} className="input !w-auto max-w-52" value={value||''} onChange={e=>onChange(e.target.value)}><option value="">{def.all_label||`All ${def.label}`}</option>{filterOptions(def,opts).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>;
+ return <input aria-label={def.label} className="input !w-auto max-w-52" type={def.control==='number'?'number':def.control==='date'?'date':'text'} placeholder={def.label} value={value||''} onChange={e=>onChange(e.target.value)}/>;
+}
 const tones={success:'text-success-ink bg-success-soft',danger:'text-danger-ink bg-danger-soft',brand:'text-brand-ink bg-brand-soft',warning:'text-warning-ink bg-warning-soft'};
 const currency=v=>peso(v||0);
 const asNumber=v=>new Intl.NumberFormat('en-PH',{maximumFractionDigits:2}).format(v||0);
@@ -117,23 +124,28 @@ export default function Dashboard(){
  const [d,setD]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const [details,setDetails]=useState(null);
  const [refresh,setRefresh]=useState(0);
+ const [filterDefs,setFilterDefs]=useState(defaultFilters),[opts,setOpts]=useState({clients:[],products:[]});
+ const [settingsLoaded,setSettingsLoaded]=useState(false);
  const current=today(),bounds=dashboardBounds(selected,current);
+ const enabled=filterDefs.filter(f=>f.enabled&&f.key!=='dateRange');
+ const active=Object.fromEntries(enabled.map(f=>[f.key,search.get(f.key)||'']).filter(([,v])=>v));
+ const activeKey=qs(active);
+ useEffect(()=>{let live=true;Promise.all([api('/api/dashboard-filters'),api('/api/filters/clients'),api('/api/filters/products')]).then(([settings,clients,products])=>{if(live){setFilterDefs(settings.filters);setOpts({clients,products});}}).catch(()=>{}).finally(()=>{if(live)setSettingsLoaded(true)});return()=>{live=false}},[refresh]);
  useEffect(()=>{
    let live=true;setLoading(true);setD(null);
-   api(`/api/dashboard/period-report?${qs({range:selected})}`)
+   api(`/api/dashboard/period-report?${qs({range:selected,...active})}`)
      .then(r=>{if(live){setD(r);setError('');}})
      .catch(e=>{if(live)setError(e.message);})
      .finally(()=>{if(live)setLoading(false);});
    return ()=>{live=false;};
- },[selected,refresh,current]);
- const choose=(value)=>{setDetails(null);const next=new URLSearchParams(search);next.set('range',value);setSearch(next,{replace:true});};
+ },[selected,refresh,current,activeKey,settingsLoaded]);
+ const choose=(key,value)=>{setDetails(null);const next=new URLSearchParams(search);if(key==='dateRange'){next.set('range',value);}else if(value){next.set(key,value);}else{next.delete(key);}setSearch(next,{replace:true});};
  const open=(filters={})=>navigate(`/invoices?${qs(filters)}`);
  return <div className="space-y-5">
  <PageHeader title="Dashboard" description="Invoice and sales performance" actions={<button type="button" className="btn btn-secondary" disabled={loading} onClick={()=>setRefresh(n=>n+1)}><RefreshCw size={15} className={loading?'animate-spin':''}/>Refresh</button>}/>
- <div className="flex flex-wrap items-center gap-3" role="group" aria-label="Dashboard period">
-  <CalendarDays size={18} className="text-fg-muted" aria-hidden="true"/>
-  {VALID.map(key=><button type="button" key={key} onClick={()=>choose(key)} aria-pressed={selected===key}
-    className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-brand ${selected===key?'border-brand bg-brand-soft text-brand-ink':'border-line bg-surface text-fg-muted hover:bg-surface-2'}`}>{key==='month'?'This Month':key==='year'?'This Year':`This Quarter – Q${bounds.quarter}`}</button>)}
+ <div className="flex flex-wrap items-center gap-3" role="group" aria-label="Dashboard filters">
+ <CalendarDays size={18} className="text-fg-muted" aria-hidden="true"/>
+ {filterDefs.filter(f=>f.enabled).map(def=><DashboardFilter key={def.key} def={def} value={def.key==='dateRange'?selected:(search.get(def.key)||'')} onChange={value=>choose(def.key,value)} opts={opts} bounds={bounds}/>)}
  </div>
  {error&&<div role="alert" className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-ink">{error}</div>}
  {loading?<Loading/>:!d?<Empty label="Could not load dashboard"/>:d.kpis.invoiceCount===0?<div className="card card-pad"><Empty label="No invoices in this period"/></div>:
