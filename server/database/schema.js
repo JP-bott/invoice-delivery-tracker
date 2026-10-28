@@ -65,6 +65,10 @@ export const ITEM_STATEMENTS = [
 // costs existed: those invoices keep their stored amount and are read as before.
 export const ITEM_PRICING_COLUMNS = ['unit_cost_centavos', 'amount_centavos'];
 
+// An optional description is stored with each invoice line item. Existing rows retain their data.
+// Also documented in migrations/008_invoice_item_description.sql.
+export const ITEM_DESCRIPTION_COLUMN = "description TEXT NOT NULL DEFAULT ''";
+
 // Registered clients (Settings > Clients) that the Add Invoice form can suggest. migrations/005_clients.sql mirrors this and
 // INVOICE_CLIENT_COLUMNS; a test keeps them in sync. An invoice never points at a client row: it keeps its own copy of the
 // name, TIN and address (the snapshot taken when it was saved), so renaming or deleting a client never rewrites issued invoices.

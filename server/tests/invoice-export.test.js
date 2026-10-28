@@ -17,7 +17,7 @@ const draft = (i) => ({
 });
 describe('complete invoice Excel export', () => {
  it('builds a real XLSX ZIP with all report sheets and safely preserves text', async () => {
-  const invoice={id:1,invoice_no:'SI - 0001',date_issued:'2026-10-10',client_name:'=SUM(1,1)',amount:1200,amount_paid:200,outstanding:1000,payment_status:'Pending',items:[{product_service:'Service',quantity:2,unit_cost:600,amount:1200}],timeline:[{id:4,stage_label:'Under review',stage_tone:'info',note:'Check required',created_at:'2026-10-10T10:00:00Z',updated_at:'2026-10-10T10:00:00Z'}],custom_fields:{'12':'ABC'}};
+  const invoice={id:1,invoice_no:'SI - 0001',date_issued:'2026-10-10',client_name:'=SUM(1,1)',amount:1200,amount_paid:200,outstanding:1000,payment_status:'Pending',items:[{product_service:'Service',description:'Installation and configuration',quantity:2,unit_cost:600,amount:1200}],timeline:[{id:4,stage_label:'Under review',stage_tone:'info',note:'Check required',created_at:'2026-10-10T10:00:00Z',updated_at:'2026-10-10T10:00:00Z'}],custom_fields:{'12':'ABC'}};
   const file=buildInvoiceWorkbook([invoice],[{id:12,label:'PO Number',input_type:'text'}]);
   const bytes=new Uint8Array(await file.arrayBuffer());
   expect([...bytes.slice(0,4)]).toEqual([80,75,3,4]);
@@ -53,6 +53,8 @@ describe('complete invoice Excel export', () => {
   expect(decoded).toContain('SI - 0001');
   expect(decoded).toContain('=SUM(1,1)');
   expect(decoded).toContain('Check required');
+  expect(decoded).toContain('Product Description');
+  expect(decoded).toContain('Installation and configuration');
  });
  it('exports every invoice in ascending ID batches, even beyond the 100 row UI limit', async () => {
   process.env.TURSO_DATABASE_URL='file:'+path.join(fs.mkdtempSync(path.join(os.tmpdir(),'idt-export-')),'db.sqlite');
