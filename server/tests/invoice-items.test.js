@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import os from 'node:os'; import path from 'node:path'; import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@libsql/client';
-import { ITEM_STATEMENTS, SCHEMA_STATEMENTS } from '../database/schema.js';
+import { ITEM_STATEMENTS, SCHEMA_STATEMENTS, ITEM_DESCRIPTION_COLUMN } from '../database/schema.js';
+import { initSchema } from '../database/db.js';
 import { validateInvoice } from '../services/validate.js';
 import { itemsOf, itemsSummary, formatQty } from '../../client/src/utils/items.js';
 
@@ -26,6 +27,13 @@ describe('item validation', () => {
     expect(r.value.items).toEqual([{ product_service: 'Cement', quantity: 10, unit_cost_centavos: 3000, amount_centavos: 30000 }, { product_service: 'IT Services', quantity: 2.5, unit_cost_centavos: 8000, amount_centavos: 20000 }]);
     expect(r.value.amount_centavos).toBe(50000);
     expect(r.value.product_service).toBe('Cement, IT Services');
+  });
+  it('validates an optional per-item product description', () => {
+    const result = v({ items: [{ ...two[0], description: '  Type 1 cement  ' }, { ...two[1], description: ' ' }] });
+    expect(result.errors).toEqual({});
+    expect(result.value.items[0].description).toBe('Type 1 cement');
+    expect(result.value.items[1].description).toBeUndefined();
+    expect(v({ items: [{ ...two[0], description: 'x'.repeat(501) }] }).errors.items_0_description).toMatch(/500/);
   });
   it('treats a lone product_service as one item with quantity 1', () => {
     expect(v({ product_service: 'P' }).value.items).toEqual([{ product_service: 'P', quantity: 1, unit_cost_centavos: 50000, amount_centavos: 50000 }]);
@@ -52,6 +60,24 @@ describe('invoice items API', () => {
     expect(upd.body.amount).toBe(300);
     expect(upd.body.product_service).toBe('Rice 50kg');
     expect((await GET(`/api/invoices/${created.body.id}`)).body.items).toHaveLength(1);
+  });
+  it('persists product descriptions across add, fetch, edit, and export without changing totals', async () => {
+    const created = await POST('/api/invoices', inv({ items: [{ ...two[0], description: ' Type 1 cement ' }, { ...two[1], description: 'Installation and configuration' }] }));
+    expect(created.status).toBe(201);
+    expect(created.body.amount).toBe(500);
+    expect(created.body.items.map(x => x.description)).toEqual(['Type 1 cement', 'Installation and configuration']);
+    const id = created.body.id;
+    expect((await GET(`/api/invoices/${id}`)).body.items[0].description).toBe('Type 1 cement');
+    expect((await GET('/api/invoices?pageSize=100')).body.data.find(x => x.id === id).items[1].description).toBe('Installation and configuration');
+    expect((await GET('/api/invoices/export-data')).body.data.find(x => x.id === id).items[0].description).toBe('Type 1 cement');
+    const updated = await PUT(`/api/invoices/${id}`, inv({ items: [{ ...two[0], description: 'Updated specification' }, { ...two[1], description: '' }] }));
+    expect(updated.status).toBe(200);
+    expect(updated.body.amount).toBe(500);
+    expect(updated.body.items[0].description).toBe('Updated specification');
+    expect(updated.body.items[1].description).toBeUndefined();
+    const db = createClient({ url: 'file:' + dbFile });
+    expect((await db.execute({ sql: 'SELECT description FROM invoice_items WHERE invoice_id = ? ORDER BY position', args: [id] })).rows.map(x => x.description)).toEqual(['Updated specification', '']);
+    await DEL(`/api/invoices/${id}`);
   });
   it('returns items in the list and the product filter still matches any item', async () => {
     const c = await POST('/api/invoices', inv({ items: [{ product_service: 'Zebra Crossing Paint', unit_cost: '50', quantity: 4 }, { product_service: 'Brushes', unit_cost: '37.50', quantity: 8 }] }));
@@ -98,6 +124,23 @@ describe('client item helpers', () => {
   });
 });
 
+describe('item description schema migration', () => {
+  it('adds the optional description to old databases without altering existing items', async () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'idt-descriptions-')), 'old.db');
+    const c = createClient({ url: 'file:' + file });
+    await c.batch([...SCHEMA_STATEMENTS, ...ITEM_STATEMENTS], 'write');
+    await c.execute("INSERT INTO invoices (date_issued,invoice_no,client_name,product_service,amount_centavos,amount_paid_centavos,payment_status,created_at,updated_at) VALUES ('2026-01-01','OLD-DESC','A','Cement',50000,0,'Pending','t','t')");
+    await c.execute("INSERT INTO invoice_items (invoice_id,position,product_service,quantity) VALUES (1,0,'Cement',2)");
+    await initSchema(c); await initSchema(c);
+    expect((await c.execute('PRAGMA table_info(invoice_items)')).rows.map(x => x.name)).toContain('description');
+    const item = (await c.execute('SELECT product_service, quantity, description FROM invoice_items')).rows[0];
+    expect([item.product_service, Number(item.quantity), item.description]).toEqual(['Cement', 2, '']);
+  });
+  it('documents the additive SQL migration', () => {
+    const sql = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../migrations/008_invoice_item_description.sql'), 'utf8');
+    expect(sql).toContain(`ALTER TABLE invoice_items ADD COLUMN ${ITEM_DESCRIPTION_COLUMN};`);
+  });
+});
 describe('items migration file', () => {
   it('contains every item statement', () => {
     const norm = (s) => s.replace(/\s+/g, ' ').trim();

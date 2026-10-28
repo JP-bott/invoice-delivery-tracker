@@ -348,6 +348,11 @@ describe('schema migration', () => {
 });
 
 describe('preview pricing (client) matches what is saved', () => {
+  it('shows optional product descriptions on the invoice sheet without changing amounts', () => {
+    const p = sheetPricing({ items: [{ product_service: 'Cement', description: '50kg Type 1', unit_cost: '100', quantity: '2' }] });
+    expect(p.rows[0]).toMatchObject({ d: 'Cement', description: '50kg Type 1', q: '2', u: '100.00', a: '200.00' });
+    expect(p.total).toBe(20000);
+  });
   it('a new invoice in the form: one row per item, subtotal = sum of line amounts', () => {
     const p = sheetPricing({ items: [{ product_service: 'Cement', unit_cost: '1,250.50', quantity: '2' }, { product_service: 'IT Services', unit_cost: '99.99', quantity: '1.5' }, { product_service: '', unit_cost: '', quantity: '1' }] });
     expect(p.rows).toEqual([{ q: '2', d: 'Cement', u: '1,250.50', a: '2,501.00' }, { q: '1.5', d: 'IT Services', u: '99.99', a: '149.99' }]);
