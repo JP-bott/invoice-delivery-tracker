@@ -31,6 +31,25 @@ function cleanItems(b, e, t) {
   return { items, amount: priced.ok ? priced.subtotal : null };
 }
 
+// Supplemental invoice-sheet text is deliberately independent of products and pricing.
+// Omitted text_rows from older clients preserves previously saved text on edits.
+function cleanTextRows(body, errors, itemCount, existing = []) {
+  const omitted = body.text_rows === undefined;
+  const raw = omitted ? existing : body.text_rows;
+  if (!Array.isArray(raw)) { errors.text_rows = 'Invalid description rows'; return []; }
+  if (raw.length > 50) { errors.text_rows = 'At most 50 description rows per invoice'; return []; }
+  return raw.map((row, i) => {
+    const text = typeof row?.text === 'string' ? row.text.trim() : '';
+    const after = Number(row?.after_item);
+    if (!text) errors[`text_rows_${i}_text`] = 'Description text is required';
+    else if (text.length > 2000) errors[`text_rows_${i}_text`] = 'Must be 2000 characters or fewer';
+    if (!Number.isInteger(after) || after < 0 || (!omitted && after > itemCount)) {
+      errors[`text_rows_${i}_after_item`] = 'Choose a valid position';
+    }
+    return { text, after_item: omitted ? Math.min(Math.max(after || 0, 0), itemCount) : after };
+  });
+}
+
 // Client TIN / address are a copy of the registered client's details taken when the invoice is saved. A request that leaves the
 // key out (an older client, a script) keeps what the invoice already has; sending an empty string clears it.
 export const CLIENT_TIN_MAX = 30, CLIENT_ADDRESS_MAX = 300;
@@ -81,6 +100,7 @@ export function validateInvoice(b = {}, ctx = {}) {
   Object.assign(v, cleanClientDetails(b, e, ctx.existing));
   const priced = cleanItems(b, e, t);
   v.items = priced.items;
+  v.text_rows = cleanTextRows(b, e, v.items.length, ctx.existing?.text_rows || []);
   v.product_service = v.items.map((it) => it.product_service).filter(Boolean).join(', ');
   if (!STATUSES.includes(v.payment_status)) e.payment_status = 'Invalid status';
   const amt = priced.amount; // derived from the line items; a submitted `amount` is ignored when items are sent

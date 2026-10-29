@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Eye, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, Loader2, Plus, Trash2 } from 'lucide-react';
 import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
 import { valueOf } from '../../utils/customFields.js';
@@ -58,10 +58,29 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   const cfStar = (f) => (f.required ? <span className="ml-0.5 text-danger" aria-hidden="true">*</span> : <span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span>);
   // Products/services: any number of rows, each with a quantity.
   const items = form.items?.length ? form.items : [{ ...blankItem(), product_service: form.product_service || '' }];
+  const textRows = Array.isArray(form.text_rows) ? form.text_rows : [];
   const setItems = (next) => setForm({ ...form, items: next });
   const setItem = (i, patch) => setItems(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
-  const addItem = () => { const at = items.length; setItems([...items, blankItem()]); requestAnimationFrame(() => document.getElementById(`invoice-item-${at}-product`)?.focus()); };
-  const removeItem = (i) => setItems(items.filter((_, j) => j !== i));
+  const addItem = () => {
+    const at = items.length;
+    setForm({ ...form, items: [...items, blankItem()], text_rows: textRows.map((r) => ({ ...r, after_item: r.after_item === at ? at + 1 : r.after_item })) });
+    requestAnimationFrame(() => document.getElementById(`invoice-item-${at}-product`)?.focus());
+  };
+  const removeItem = (i) => setForm({ ...form, items: items.filter((_, j) => j !== i), text_rows: textRows.map((r) => ({ ...r, after_item: r.after_item > i ? r.after_item - 1 : r.after_item })) });
+  const setTextRow = (i, patch) => setForm({ ...form, text_rows: textRows.map((r, j) => (i === j ? { ...r, ...patch } : r)) });
+  const addTextRow = () => {
+    const at = textRows.length;
+    setForm({ ...form, text_rows: [...textRows, { text: '', after_item: items.length }] });
+    requestAnimationFrame(() => document.getElementById(`invoice-text-row-${at}`)?.focus());
+  };
+  const removeTextRow = (i) => setForm({ ...form, text_rows: textRows.filter((_, j) => i !== j) });
+  const moveTextRow = (i, direction) => {
+    const dest = i + direction;
+    if (dest < 0 || dest >= textRows.length) return;
+    const next = [...textRows];
+    [next[i], next[dest]] = [next[dest], next[i]];
+    setForm({ ...form, text_rows: next });
+  };
   const priced = priceItems(items);
   const total = priced.lines.reduce((sum, line) => sum + (line.amount ?? 0), 0); // invoice amount = sum of line amounts (VAT-inclusive, as before)
   const calculatedDueDate = dueDateFromDelivery(form.delivery_date) || '';
@@ -217,6 +236,42 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             {error('product_service')}
             {form.id && form.amount != null && items.some((it) => !String(it.unit_cost ?? '').trim()) && <p className="mt-2 text-xs text-warning-ink" role="status">This invoice was saved before unit costs were recorded (amount ₱{formatAmount(form.amount)}). Enter a unit cost for each item; the amount is recalculated from them when you save.</p>}
             <button type="button" className="btn btn-secondary mt-2.5" onClick={addItem} disabled={items.length >= MAX_ITEMS}><Plus size={15} aria-hidden="true" />Add Another</button>
+          </fieldset>
+          <fieldset className="sm:col-span-2">
+            <legend className="label mb-1.5 block">Additional nature of service text <span className="text-xs font-normal text-fg-subtle">(optional)</span></legend>
+            <p className="mb-3 text-xs text-fg-muted">Add separate, non-billable text rows for specifications, project details, or any supporting notes. Choose where each row appears in the invoice. These are not products and do not affect the total.</p>
+            <div className="space-y-3">
+              {textRows.map((entry, i) => {
+                const tKey = `text_rows_${i}_text`, pKey = `text_rows_${i}_after_item`;
+                return (
+                  <div key={i} className="rounded-xl border border-line bg-surface-2 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-fg">Text row {i + 1}</span>
+                      <div className="flex items-center gap-1">
+                        <button type="button" className="btn btn-secondary btn-icon !h-8 !w-8" disabled={i === 0} onClick={() => moveTextRow(i, -1)} aria-label={`Move text row ${i + 1} up`} title="Move up in text row order"><ArrowUp size={15} aria-hidden="true" /></button>
+                        <button type="button" className="btn btn-secondary btn-icon !h-8 !w-8" disabled={i === textRows.length - 1} onClick={() => moveTextRow(i, 1)} aria-label={`Move text row ${i + 1} down`} title="Move down in text row order"><ArrowDown size={15} aria-hidden="true" /></button>
+                        <button type="button" className="btn btn-secondary btn-icon !h-8 !w-8" onClick={() => removeTextRow(i)} aria-label={`Remove text row ${i + 1}`} title="Remove text row"><Trash2 size={15} aria-hidden="true" /></button>
+                      </div>
+                    </div>
+                    <label className="label block" htmlFor={`invoice-text-row-${i}`}>
+                      <span className="mb-1 block text-xs">Nature of service text</span>
+                      <textarea id={`invoice-text-row-${i}`} rows={2} maxLength={2000} required placeholder="Enter text exactly as it should appear in its own invoice row" className={cls(tKey) + ' min-h-16 resize-y whitespace-pre-wrap'} value={entry.text} onChange={(e) => setTextRow(i, { text: e.target.value })} {...aria(tKey)} />
+                      {error(tKey)}
+                    </label>
+                    <label className="label block" htmlFor={`invoice-text-position-${i}`}>
+                      <span className="mb-1 block text-xs">Place this row</span>
+                      <select id={`invoice-text-position-${i}`} className={cls(pKey)} value={entry.after_item} onChange={(e) => setTextRow(i, { after_item: Number(e.target.value) })} {...aria(pKey)}>
+                        <option value={0}>Above the first product/service</option>
+                        {items.map((item, index) => <option key={index} value={index + 1}>{index === items.length - 1 ? 'Below the last product/service' : `After product ${index + 1}`}{item.product_service ? ` · ${item.product_service}` : ''}</option>)}
+                      </select>
+                      {error(pKey)}
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+            {error('text_rows')}
+            <button type="button" className="btn btn-secondary mt-2.5" onClick={addTextRow} disabled={textRows.length >= 50}><Plus size={15} aria-hidden="true" />Add description-only row</button>
           </fieldset>
         </Group>
         <Group id="payment-heading" title="Payment" description="Amount billed, received and current payment state.">

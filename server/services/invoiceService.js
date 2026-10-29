@@ -105,12 +105,20 @@ async function withItems(apiRows) {
   if (!apiRows.length) return apiRows;
   const ids = apiRows.map((r) => r.id);
   const rows = (await getDb().execute({ sql: `SELECT invoice_id, product_service, description, quantity, unit_cost_centavos, amount_centavos FROM invoice_items WHERE invoice_id IN (${ids.map(() => '?').join(',')}) ORDER BY invoice_id, position, id`, args: ids })).rows;
+  const textRecords = (await getDb().execute({ sql: `SELECT invoice_id, text, after_item FROM invoice_text_rows WHERE invoice_id IN (${ids.map(() => '?').join(',')}) ORDER BY invoice_id, sort_order, id`, args: ids })).rows;
+  const textBy = new Map();
+  for (const x of textRecords) {
+    const k = Number(x.invoice_id);
+    if (!textBy.has(k)) textBy.set(k, []);
+    textBy.get(k).push({ text: x.text, after_item: Number(x.after_item) });
+  }
   const by = new Map();
   for (const x of rows) { const k = Number(x.invoice_id); if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
   return apiRows.map((r) => {
     const list = by.get(r.id);
-    if (!list) return { ...r, items: [{ product_service: r.product_service, quantity: 1, unit_cost: r.amount, amount: r.amount }] };
-    return { ...r, items: list.map((x) => {
+    const text_rows = textBy.get(r.id) || [];
+    if (!list) return { ...r, text_rows, items: [{ product_service: r.product_service, quantity: 1, unit_cost: r.amount, amount: r.amount }] };
+    return { ...r, text_rows, items: list.map((x) => {
       const priced = x.unit_cost_centavos != null && x.amount_centavos != null;
       return { product_service: x.product_service, ...(x.description ? { description: x.description } : {}), quantity: Number(x.quantity), unit_cost: priced ? toPesos(Number(x.unit_cost_centavos)) : null, amount: priced ? toPesos(Number(x.amount_centavos)) : list.length === 1 ? r.amount : null };
     }) };
@@ -122,6 +130,7 @@ export async function get(id) {
 }
 const cols = (v) => [v.date_issued, v.invoice_no, v.cr_no, v.client_name, v.client_tin, v.client_address, v.product_service, v.due_date, v.amount_centavos, v.amount_paid_centavos, v.payment_status, v.delivery_date, v.remarks];
 const itemStatements = (items, ref) => items.map((it, i) => ({ sql: `INSERT INTO invoice_items (invoice_id, position, product_service, quantity, unit_cost_centavos, amount_centavos, description) SELECT id, ?, ?, ?, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [i, it.product_service, it.quantity, it.unit_cost_centavos, it.amount_centavos, it.description || '', ...ref.args] }));
+const textStatements = (rows, ref) => rows.map((row, i) => ({ sql: `INSERT INTO invoice_text_rows (invoice_id, after_item, sort_order, text) SELECT id, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [row.after_item, i, row.text, ...ref.args] }));
 
 // ---- Invoice numbers ------------------------------------------------------------------------------------------------------
 // invoice_sequences.last_number is the last number ever assigned per type and only moves forward, so a deleted, cancelled or voided
@@ -162,7 +171,7 @@ export async function create(v, writes = []) {
         { sql: 'INSERT OR IGNORE INTO invoice_sequences (prefix, last_number) VALUES (?, 0)', args: [prefix] },
         bump,
         { sql: `INSERT INTO invoices (date_issued,invoice_no,terms,cr_no,client_name,client_tin,client_address,product_service,due_date,amount_centavos,amount_paid_centavos,payment_status,delivery_date,remarks,created_at,updated_at) VALUES (?,${numberExpression},?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, args: [v.date_issued, manualNo || prefix, FIXED_TERMS, ...cols(v).slice(2), now, now] },
-        ...itemStatements(v.items, ref), ...valueStatements(writes, ref),
+        ...itemStatements(v.items, ref), ...textStatements(v.text_rows, ref), ...valueStatements(writes, ref),
       ], 'write');
       return get(Number(results[2].lastInsertRowid));
     } catch (e) {
@@ -183,14 +192,16 @@ export async function update(id, v, writes = []) {
     { sql: `UPDATE invoices SET date_issued=?,invoice_no=?,cr_no=?,client_name=?,client_tin=?,client_address=?,product_service=?,due_date=?,amount_centavos=?,amount_paid_centavos=?,payment_status=?,delivery_date=?,remarks=?,updated_at=? WHERE id=?`, args: [...cols(v), new Date().toISOString(), id] },
     ...sequenceWrites,
     { sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] },
-    ...itemStatements(v.items, refById(id)), ...valueStatements(writes, refById(id)),
+    { sql: 'DELETE FROM invoice_text_rows WHERE invoice_id = ?', args: [id] },
+    ...itemStatements(v.items, refById(id)), ...textStatements(v.text_rows, refById(id)), ...valueStatements(writes, refById(id)),
   ], 'write');
   return r.rowsAffected ? get(id) : null;
 }
 export async function remove(id) {
-  const [, , , r] = await getDb().batch([
+  const [, , , , r] = await getDb().batch([
     { sql: 'DELETE FROM invoice_custom_values WHERE invoice_id = ?', args: [id] },
     { sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] },
+    { sql: 'DELETE FROM invoice_text_rows WHERE invoice_id = ?', args: [id] },
     { sql: 'DELETE FROM payment_timeline_events WHERE invoice_id = ?', args: [id] },
     { sql: 'DELETE FROM invoices WHERE id = ?', args: [id] },
   ], 'write');

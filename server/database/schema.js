@@ -69,6 +69,18 @@ export const ITEM_PRICING_COLUMNS = ['unit_cost_centavos', 'amount_centavos'];
 // Also documented in migrations/008_invoice_item_description.sql.
 export const ITEM_DESCRIPTION_COLUMN = "description TEXT NOT NULL DEFAULT ''";
 
+// Separate, non-billable nature-of-service text lines. after_item=0 places text before products;
+// after_item=N places it after N products. sort_order preserves multiple texts in one position.
+export const TEXT_ROW_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS invoice_text_rows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    after_item INTEGER NOT NULL CHECK (after_item >= 0),
+    sort_order INTEGER NOT NULL,
+    text TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_invoice_text_rows_invoice ON invoice_text_rows(invoice_id, sort_order)`,
+];
+
 // Registered clients (Settings > Clients) that the Add Invoice form can suggest. migrations/005_clients.sql mirrors this and
 // INVOICE_CLIENT_COLUMNS; a test keeps them in sync. An invoice never points at a client row: it keeps its own copy of the
 // name, TIN and address (the snapshot taken when it was saved), so renaming or deleting a client never rewrites issued invoices.

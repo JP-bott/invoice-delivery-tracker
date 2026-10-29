@@ -19,7 +19,7 @@ import { blankItem, deriveUnitCost } from '../utils/items.js';
 import { splitInvoiceNo } from '../utils/invoiceNo.js';
 
 const newForm = () => ({ ...blank, items: [blankItem()], custom_fields: {} });
-const blank = { date_issued: '', invoice_prefix: 'SVI', invoice_number_override: null, cr_no: '', client_name: '', client_tin: '', client_address: '', items: [blankItem()], payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '', custom_fields: {} };
+const blank = { text_rows: [], date_issued: '', invoice_prefix: 'SVI', invoice_number_override: null, cr_no: '', client_name: '', client_tin: '', client_address: '', items: [blankItem()], payment_status: 'Pending', amount_paid: '0', delivery_date: '', remarks: '', custom_fields: {} };
 const noFilters = { q: '', dateFrom: '', dateTo: '', client: '', product: '', paymentStatus: '', deliveryStatus: '' };
 // Built-in filters plus any custom-field filters in the URL (cf_<id>).
 const filtersFromParams = (params) => Object.fromEntries([...Object.keys(noFilters), ...[...params.keys()].filter(isCustomFilterKey)].map((key) => [key, params.get(key) || '']));
@@ -119,7 +119,7 @@ export default function Invoices() {
     setDeleting(false); setDel(null);
   };
   const openAdd = () => { reloadFields(); loadClients(); setForm(newForm()); setErrs({}); };
-  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), invoice_number_override: null, amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', client_tin: r.client_tin ?? '', client_address: r.client_address ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', items: editItems(r), custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); loadClients(); setErrs({}); };
+  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), invoice_number_override: null, amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', client_tin: r.client_tin ?? '', client_address: r.client_address ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', items: editItems(r), text_rows: r.text_rows || [], custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); loadClients(); setErrs({}); };
   const onSort = (k) => setSort({ sortBy: k, sortDir: sort.sortBy === k && sort.sortDir === 'asc' ? 'desc' : 'asc' });
   const clearFilters = () => { setF(noFilters); setSearchParams({}); };
   const filtered = Object.keys(dq).some((k) => dq[k]);

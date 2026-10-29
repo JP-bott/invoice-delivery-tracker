@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client';
-import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS, ITEM_DESCRIPTION_COLUMN, CLIENT_STATEMENTS, INVOICE_CLIENT_COLUMNS, SEQUENCE_STATEMENTS, SEQUENCE_PREFIXES, INVOICE_TERMS_COLUMN, PAYMENT_TIMELINE_STATEMENTS } from './schema.js';
+import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS, ITEM_DESCRIPTION_COLUMN, TEXT_ROW_STATEMENTS, CLIENT_STATEMENTS, INVOICE_CLIENT_COLUMNS, SEQUENCE_STATEMENTS, SEQUENCE_PREFIXES, INVOICE_TERMS_COLUMN, PAYMENT_TIMELINE_STATEMENTS } from './schema.js';
 import { sequenceOf } from '../../shared/invoiceNumber.js';
 import { seedStages } from '../services/paymentTimelineService.js';
 
@@ -25,7 +25,7 @@ export function getDb() {
 
 // Idempotent (CREATE ... IF NOT EXISTS), one round trip. Never drops or alters existing data.
 export async function initSchema(c = getDb()) {
-  await c.batch([...SCHEMA_STATEMENTS, ...CUSTOM_FIELD_STATEMENTS, ...ITEM_STATEMENTS, ...CLIENT_STATEMENTS, ...SEQUENCE_STATEMENTS, ...PAYMENT_TIMELINE_STATEMENTS], 'write');
+  await c.batch([...SCHEMA_STATEMENTS, ...CUSTOM_FIELD_STATEMENTS, ...ITEM_STATEMENTS, ...TEXT_ROW_STATEMENTS, ...CLIENT_STATEMENTS, ...SEQUENCE_STATEMENTS, ...PAYMENT_TIMELINE_STATEMENTS], 'write');
   const columns = await c.execute('PRAGMA table_info(invoices)');
   if (!columns.rows.some((column) => column.name === 'due_date')) await c.execute('ALTER TABLE invoices ADD COLUMN due_date TEXT');
   for (const name of INVOICE_CLIENT_COLUMNS) if (!columns.rows.some((column) => column.name === name)) await c.execute(`ALTER TABLE invoices ADD COLUMN ${name} TEXT`);

@@ -111,6 +111,9 @@ export function buildInvoiceWorkbook(invoices, fields = [], generatedAt = new Da
   item.unit_cost==null?textCell('Not recorded'):numCell(item.unit_cost),
   item.amount==null?textCell('Not recorded'):numCell(item.amount),safeText(x.payment_status),safeText(item.description)
  ]));
+ const textRows=active.flatMap(x=>(x.text_rows||[]).map((entry,i)=>[
+  safeText(x.invoice_no),numCell(x.id),numCell(i+1),safeText(x.client_name),numCell(entry.after_item),safeText(entry.text)
+ ]));
  const customRows=active.flatMap(x=>fields.filter(f=>x.custom_fields?.[f.id]!=null).map(f=>[
   safeText(x.invoice_no),safeText(f.label),safeText(f.input_type),safeText(x.custom_fields[f.id]),safeText(f.archived?'Archived':'Active')
  ]));
@@ -125,6 +128,7 @@ export function buildInvoiceWorkbook(invoices, fields = [], generatedAt = new Da
  ['Payments recorded',numCell(paid),'Sum of saved paid amounts, PHP'],
  ['Outstanding balance',numCell(outstanding),'Sum of saved outstanding balances, PHP'],
  ['Invoice line items',numCell(itemRows.length),'Detailed in Line Items sheet'],
+ ['Supporting text rows',numCell(textRows.length),'Detailed in Supporting Text sheet'],
  ['Custom field values',numCell(customRows.length),'Includes archived custom field values'],
  ['Payment timeline updates',numCell(timelineRows.length),'Detailed in Payment History sheet'],
  ['Data scope','All records','No page limit and no active screen filters'],
@@ -132,8 +136,9 @@ export function buildInvoiceWorkbook(invoices, fields = [], generatedAt = new Da
  ],[30,28,58],[1]);
  const register=sheet('Invoice Register',headers,invoiceRows,[19,17,27,19,42,17,40,13,17,20,20,20,19,17,19,46,13,27,27,...fields.map(()=>23)],[9,10,11],[1,8,13],[12,14]);
  const items=sheet('Line Items',['Invoice No.','Record ID','Line #','Client','Product / Service','Quantity','Unit Cost (PHP)','Line Amount (PHP)','Payment Status','Product Description'],itemRows,[20,13,12,27,38,14,20,22,21,48],[6,7],[],[8]);
+ const textSheet=sheet('Supporting Text',['Invoice No.','Record ID','Text Row #','Client','After Product #','Nature of Service Text'],textRows,[20,13,13,28,18,78]);
  const customs=sheet('Custom Fields',['Invoice No.','Field','Field Type','Saved Value','Field Availability'],customRows,[20,30,19,48,24]);
  const history=sheet('Payment History',['Invoice No.','Client','Stage','Tone','Progress Note','Created At (UTC)','Updated At (UTC)','Event ID'],timelineRows,[20,27,31,18,65,28,28,14]);
- return makeXlsx([summary,register,items,customs,history]);
+ return makeXlsx([summary,register,items,textSheet,customs,history]);
 }
 export { makeXlsx };
