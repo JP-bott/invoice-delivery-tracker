@@ -32,6 +32,7 @@ export const lineAmountCentavos = (unitCentavos, qtyMilli) => Number((BigInt(uni
 export function priceItems(items = []) {
   let subtotal = 0, ok = items.length > 0;
   const lines = items.map((it) => {
+    if (it?.is_title === true) return { unit: 0, qtyMilli: 1000, amount: 0, errors: {}, isTitle: true };
     const unit = parseUnitCost(it?.unit_cost), qtyMilli = parseQtyMilli(it?.quantity), errors = {};
     if (unit == null) errors.unit_cost = 'Enter a unit cost of 0 or more (max 2 decimals)';
     if (qtyMilli == null) errors.quantity = 'Enter a quantity above 0 (max 3 decimals)';
@@ -55,4 +56,26 @@ export function computeTotals(totalCentavos, type, whtRate) {
   else if (type === 'exempt') sE = total; else sZ = total;
   const wht = Math.round(net * whtRate);
   return { total, net, vat, sV, sE, sZ, wht, grand: net + vat - wht, has: total !== 0 };
+}
+
+// A priced supporting text row is an independent invoice line. It contributes to the
+// same VAT-inclusive subtotal as a standard product, without duplicating its parent's
+// amount. Product title rows contribute zero. Unknown/legacy flags default to OFF.
+export function priceInvoice(items = [], textRows = []) {
+  const products = priceItems(items);
+  const textLines = textRows.map((row) => row?.is_priced === true
+    ? priceItems([{ unit_cost: row.unit_cost, quantity: row.quantity }]).lines[0]
+    : { unit: null, qtyMilli: null, amount: 0, errors: {} });
+  const childrenByProduct = Array.from({ length: items.length }, () => 0);
+  textRows.forEach((row, index) => {
+    const after = Number(row?.after_item);
+    if (row?.is_priced === true && Number.isInteger(after) && after >= 1 && after <= items.length) {
+      childrenByProduct[after - 1] += textLines[index].amount ?? 0;
+    }
+  });
+  const validTexts = textLines.every((line) => !Object.keys(line.errors).length);
+  const subtotal = products.ok && validTexts
+    ? products.subtotal + textLines.reduce((sum, line) => sum + (line.amount ?? 0), 0)
+    : null;
+  return { lines: products.lines, textLines, childrenByProduct, subtotal, ok: subtotal !== null };
 }
