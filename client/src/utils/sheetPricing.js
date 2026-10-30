@@ -11,7 +11,8 @@ function withTextRows(productRows, entries) {
   const result = [];
   for (let position = 0; position <= productRows.length; position++) {
     for (const entry of entries) {
-      if (Number(entry?.after_item) === position && String(entry?.text ?? '').trim()) {
+      if (Number(entry?.after_item) === position && (entry?.kind === 'space' || String(entry?.text ?? '').trim())) {
+        if (entry.kind === 'space') { result.push({ q: '', d: '', u: '', a: '', spacer: true }); continue; }
         const priced = entry.is_priced === true;
         const line = priced ? priceItems([{ quantity: entry.quantity, unit_cost: entry.unit_cost }]).lines[0] : null;
         result.push({ q: priced ? formatQty(entry.quantity) : '', d: entry.text,
