@@ -52,6 +52,20 @@ export function removeProduct(items, textRows, productIndex) {
   };
 }
 
+// Delete one row from the visual arrangement. Product deletion reuses the
+// existing reattachment logic so priced descriptions are not silently lost.
+export function deleteInvoiceLine(items, textRows, line) {
+  if (line?.kind === 'product') {
+    if (!Number.isInteger(line.index) || line.index < 0 || line.index >= items.length || items.length <= 1) return null;
+    return removeProduct(items, textRows, line.index);
+  }
+  if (line?.kind === 'description' || line?.kind === 'space') {
+    if (!Number.isInteger(line.index) || line.index < 0 || line.index >= textRows.length) return null;
+    return { items, text_rows: textRows.filter((_, index) => index !== line.index) };
+  }
+  return null;
+}
+
 // Move a product together with all rows attached beneath it. This guarantees
 // product + description groupings stay intact on product reordering.
 export function moveProductGroup(items, textRows, productIndex, direction) {
