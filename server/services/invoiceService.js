@@ -105,12 +105,12 @@ async function withItems(apiRows) {
   if (!apiRows.length) return apiRows;
   const ids = apiRows.map((r) => r.id);
   const rows = (await getDb().execute({ sql: `SELECT invoice_id, product_service, description, quantity, unit_cost_centavos, amount_centavos, is_title FROM invoice_items WHERE invoice_id IN (${ids.map(() => '?').join(',')}) ORDER BY invoice_id, position, id`, args: ids })).rows;
-  const textRecords = (await getDb().execute({ sql: `SELECT invoice_id, text, after_item, is_priced, quantity, unit_cost_centavos, amount_centavos FROM invoice_text_rows WHERE invoice_id IN (${ids.map(() => '?').join(',')}) ORDER BY invoice_id, sort_order, id`, args: ids })).rows;
+  const textRecords = (await getDb().execute({ sql: `SELECT invoice_id, text, after_item, kind, is_priced, quantity, unit_cost_centavos, amount_centavos FROM invoice_text_rows WHERE invoice_id IN (${ids.map(() => '?').join(',')}) ORDER BY invoice_id, sort_order, id`, args: ids })).rows;
   const textBy = new Map();
   for (const x of textRecords) {
     const k = Number(x.invoice_id);
     if (!textBy.has(k)) textBy.set(k, []);
-    textBy.get(k).push({ text: x.text, after_item: Number(x.after_item), ...(x.is_priced ? { is_priced: true } : {}), ...(x.is_priced ? { quantity: Number(x.quantity), unit_cost: toPesos(Number(x.unit_cost_centavos)), amount: toPesos(Number(x.amount_centavos)) } : {}) });
+    textBy.get(k).push({ text: x.text, after_item: Number(x.after_item), ...(x.kind === 'space' ? { kind: 'space' } : {}), ...(x.is_priced ? { is_priced: true } : {}), ...(x.is_priced ? { quantity: Number(x.quantity), unit_cost: toPesos(Number(x.unit_cost_centavos)), amount: toPesos(Number(x.amount_centavos)) } : {}) });
   }
   const by = new Map();
   for (const x of rows) { const k = Number(x.invoice_id); if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
@@ -130,7 +130,7 @@ export async function get(id) {
 }
 const cols = (v) => [v.date_issued, v.invoice_no, v.cr_no, v.client_name, v.client_tin, v.client_address, v.product_service, v.due_date, v.amount_centavos, v.amount_paid_centavos, v.payment_status, v.delivery_date, v.remarks];
 const itemStatements = (items, ref) => items.map((it, i) => ({ sql: `INSERT INTO invoice_items (invoice_id, position, product_service, quantity, unit_cost_centavos, amount_centavos, description, is_title) SELECT id, ?, ?, ?, ?, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [i, it.product_service, it.quantity, it.unit_cost_centavos, it.amount_centavos, it.description || '', it.is_title ? 1 : 0, ...ref.args] }));
-const textStatements = (rows, ref) => rows.map((row, i) => ({ sql: `INSERT INTO invoice_text_rows (invoice_id, after_item, sort_order, text, is_priced, quantity, unit_cost_centavos, amount_centavos) SELECT id, ?, ?, ?, ?, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [row.after_item, i, row.text, row.is_priced ? 1 : 0, row.is_priced ? row.quantity : null, row.is_priced ? row.unit_cost_centavos : null, row.is_priced ? row.amount_centavos : null, ...ref.args] }));
+const textStatements = (rows, ref) => rows.map((row, i) => ({ sql: `INSERT INTO invoice_text_rows (invoice_id, after_item, sort_order, text, kind, is_priced, quantity, unit_cost_centavos, amount_centavos) SELECT id, ?, ?, ?, ?, ?, ?, ?, ? FROM invoices WHERE ${ref.where}`, args: [row.after_item, i, row.text, row.kind === 'space' ? 'space' : 'description', row.is_priced ? 1 : 0, row.is_priced ? row.quantity : null, row.is_priced ? row.unit_cost_centavos : null, row.is_priced ? row.amount_centavos : null, ...ref.args] }));
 
 // ---- Invoice numbers ------------------------------------------------------------------------------------------------------
 // invoice_sequences.last_number is the last number ever assigned per type and only moves forward, so a deleted, cancelled or voided
