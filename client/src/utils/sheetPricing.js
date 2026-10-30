@@ -16,7 +16,7 @@ function withTextRows(productRows, entries) {
         const line = priced ? priceItems([{ quantity: entry.quantity, unit_cost: entry.unit_cost }]).lines[0] : null;
         result.push({ q: priced ? formatQty(entry.quantity) : '', d: entry.text,
           u: priced && line?.unit != null ? money(line.unit) : '',
-          a: priced && line?.amount != null ? money(line.amount) : '', note: !priced, spec: priced });
+          a: priced && line?.amount != null ? money(line.amount) : '', ...(priced ? { spec: true } : { note: true }) });
       }
     }
     if (position < productRows.length) result.push(productRows[position]);
