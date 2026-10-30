@@ -26,18 +26,14 @@ function withTextRows(productRows, entries) {
 export function sheetPricing(invoice) {
   let list = (Array.isArray(invoice.items) ? invoice.items : []).filter((it) => String(it?.product_service ?? '').trim());
   if (!list.length && invoice.product_service) list = [{ product_service: invoice.product_service, quantity: 1, unit_cost: invoice.amount }];
-  const itemDetail = (it) => {
-    const description = String(it.description ?? '').trim();
-    return description ? { description } : {};
-  };
   const hasUnit = list.some((it) => String(it.unit_cost ?? '').trim() !== '');
   const storedTotal = cents(num(invoice.amount));
   if (!hasUnit && storedTotal) {
     const single = list.length === 1, qty = single ? num(list[0].quantity) : 0;
-    const rows = list.map((it) => ({ q: formatQty(it.quantity), d: String(it.product_service).trim(), ...itemDetail(it), u: single && qty > 0 ? money(Math.round(storedTotal / qty)) : '', a: single ? money(storedTotal) : '' }));
+    const rows = list.map((it) => ({ q: formatQty(it.quantity), d: String(it.product_service).trim(), u: single && qty > 0 ? money(Math.round(storedTotal / qty)) : '', a: single ? money(storedTotal) : '' }));
     return { rows: withTextRows(rows, invoice.text_rows), total: storedTotal, totalOnly: list.length > 1 };
   }
   const { lines } = priceItems(list.map((it) => ({ unit_cost: it.unit_cost, quantity: it.quantity })));
-  const rows = list.map((it, i) => ({ q: formatQty(it.quantity), d: String(it.product_service).trim(), ...itemDetail(it), u: lines[i].unit == null ? '' : money(lines[i].unit), a: lines[i].amount == null ? '' : money(lines[i].amount) }));
+  const rows = list.map((it, i) => ({ q: formatQty(it.quantity), d: String(it.product_service).trim(), u: lines[i].unit == null ? '' : money(lines[i].unit), a: lines[i].amount == null ? '' : money(lines[i].amount) }));
   return { rows: withTextRows(rows, invoice.text_rows), total: lines.reduce((sum, l) => sum + (l.amount ?? 0), 0), totalOnly: false };
 }

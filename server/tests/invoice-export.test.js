@@ -53,8 +53,8 @@ describe('complete invoice Excel export', () => {
   expect(decoded).toContain('SI - 0001');
   expect(decoded).toContain('=SUM(1,1)');
   expect(decoded).toContain('Check required');
-  expect(decoded).toContain('Product Description');
-  expect(decoded).toContain('Installation and configuration');
+  expect(decoded).not.toContain('Product Description');
+  expect(decoded).not.toContain('Installation and configuration');
  });
  it('exports every invoice in ascending ID batches, even beyond the 100 row UI limit', async () => {
   process.env.TURSO_DATABASE_URL='file:'+path.join(fs.mkdtempSync(path.join(os.tmpdir(),'idt-export-')),'db.sqlite');

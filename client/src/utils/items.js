@@ -1,8 +1,8 @@
 import { MAX_ITEMS, parseQtyMilli, parseUnitCost, lineAmountCentavos } from '../../../shared/pricing.js';
 
-// Shared helpers for invoice line items: [{ product_service, description, unit_cost, quantity }].
+// Shared helpers for invoice line items: [{ product_service, unit_cost, quantity }].
 export { MAX_ITEMS };
-export const blankItem = () => ({ product_service: '', description: '', unit_cost: '', quantity: '1' });
+export const blankItem = () => ({ product_service: '', unit_cost: '', quantity: '1' });
 
 // Keeps only digits and one decimal point (so no minus sign, exponent or letters), with at most `decimals` decimals.
 export function sanitizeDecimal(value, decimals) {

@@ -29,7 +29,6 @@
 .inv-sheet .items td.d { overflow-wrap: anywhere; }
 .inv-sheet .items td.d.sub { font-size: 7.5pt; color: #444; }
 .inv-sheet .items td.d.note-row { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.3; padding: 3px 4px; font-size: 8pt; font-weight: 400; }
-.inv-sheet .items td.d .item-description { margin-top: 2px; font-size: 7.5pt; line-height: 1.2; font-weight: 400; white-space: pre-wrap; overflow-wrap: anywhere; color: #444; }
 .inv-sheet .totals { margin-top: -1px; border: 1.5px solid var(--line); border-top: 1px solid var(--line); }
 .inv-sheet .totals td { height: 17.5px; font-size: 8pt; }
 .inv-sheet .totals .lbl { text-align: right; }

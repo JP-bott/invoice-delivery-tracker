@@ -42,7 +42,7 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
       </tbody></table>
       <table className="items">
         <thead><tr><th className="qty">QTY.</th><th>{isSalesInvoice ? 'NATURE OF GOODS' : 'NATURE OF SERVICE'}</th><th className="unit">UNIT<br />COST</th><th className="amt">AMOUNT</th></tr></thead>
-        <tbody>{rows.map((r, i) => <tr key={i}><td className="qty">{r.q}</td><td className={`d ${r.sub ? 'sub' : ''} ${r.note ? 'note-row' : ''}`}>{r.d}{r.description && <div className="item-description">{r.description}</div>}</td><td className="unit">{r.u}</td><td className="amt">{r.a}</td></tr>)}</tbody>
+        <tbody>{rows.map((r, i) => <tr key={i}><td className="qty">{r.q}</td><td className={`d ${r.sub ? 'sub' : ''} ${r.note ? 'note-row' : ''}`}>{r.d}</td><td className="unit">{r.u}</td><td className="amt">{r.a}</td></tr>)}</tbody>
       </table>
       <table className="totals"><tbody>
         <tr><td className="c1" /><td className="c2" /><td className="c3 lbl">Total Sales (Vat Inclusive)</td><td className="c4 val">{show(t.total)}</td></tr>

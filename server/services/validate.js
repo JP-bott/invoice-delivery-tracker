@@ -19,13 +19,12 @@ function cleanItems(b, e, t) {
   if (raw.length > MAX_ITEMS) { e.product_service = `At most ${MAX_ITEMS} items per invoice`; return { items: [], amount: null }; }
   const priced = priceItems(raw.map((it) => ({ unit_cost: it?.unit_cost, quantity: it?.quantity })));
   const items = raw.map((it, i) => {
-    const name = t(it?.product_service), description = t(it?.description), line = priced.lines[i];
+    const name = t(it?.product_service), line = priced.lines[i];
     if (!name) e[`items_${i}_product_service`] = 'Required';
     else if (name.length > 200) e[`items_${i}_product_service`] = 'Must be 200 characters or fewer';
-    if (description.length > 500) e[`items_${i}_description`] = 'Must be 500 characters or fewer';
     if (line.errors.unit_cost) e[`items_${i}_unit_cost`] = line.errors.unit_cost;
     if (line.errors.quantity) e[`items_${i}_quantity`] = line.errors.quantity;
-    return { product_service: name, ...(description ? { description } : {}), quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000, unit_cost_centavos: line.unit, amount_centavos: line.amount };
+    return { product_service: name, quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000, unit_cost_centavos: line.unit, amount_centavos: line.amount };
   });
   if (b.items == null && e.items_0_unit_cost) e.amount = 'Valid amount required (max 2 decimals)';
   return { items, amount: priced.ok ? priced.subtotal : null };
@@ -99,7 +98,13 @@ export function validateInvoice(b = {}, ctx = {}) {
   if (!v.client_name) e.client_name = 'Required';
   Object.assign(v, cleanClientDetails(b, e, ctx.existing));
   const priced = cleanItems(b, e, t);
-  v.items = priced.items;
+  // Preserve legacy descriptions on unchanged line items without accepting new ones.
+  // The retired field is not editable and must not be erased when an invoice is saved.
+  v.items = priced.items.map((item, i) => {
+    const old = ctx.existing?.items?.[i];
+    return old?.product_service === item.product_service && old.description
+      ? { ...item, description: old.description } : item;
+  });
   v.text_rows = cleanTextRows(b, e, v.items.length, ctx.existing?.text_rows || []);
   v.product_service = v.items.map((it) => it.product_service).filter(Boolean).join(', ');
   if (!STATUSES.includes(v.payment_status)) e.payment_status = 'Invalid status';
