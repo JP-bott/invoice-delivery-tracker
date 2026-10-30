@@ -110,7 +110,7 @@ async function withItems(apiRows) {
   for (const x of textRecords) {
     const k = Number(x.invoice_id);
     if (!textBy.has(k)) textBy.set(k, []);
-    textBy.get(k).push({ text: x.text, after_item: Number(x.after_item), is_priced: Boolean(x.is_priced), ...(x.is_priced ? { quantity: Number(x.quantity), unit_cost: toPesos(Number(x.unit_cost_centavos)), amount: toPesos(Number(x.amount_centavos)) } : {}) });
+    textBy.get(k).push({ text: x.text, after_item: Number(x.after_item), ...(x.is_priced ? { is_priced: true } : {}), ...(x.is_priced ? { quantity: Number(x.quantity), unit_cost: toPesos(Number(x.unit_cost_centavos)), amount: toPesos(Number(x.amount_centavos)) } : {}) });
   }
   const by = new Map();
   for (const x of rows) { const k = Number(x.invoice_id); if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
@@ -120,7 +120,7 @@ async function withItems(apiRows) {
     if (!list) return { ...r, text_rows, items: [{ product_service: r.product_service, quantity: 1, unit_cost: r.amount, amount: r.amount }] };
     return { ...r, text_rows, items: list.map((x) => {
       const priced = x.unit_cost_centavos != null && x.amount_centavos != null;
-      return { product_service: x.product_service, is_title: Boolean(x.is_title), ...(x.description ? { description: x.description } : {}), quantity: x.is_title ? null : Number(x.quantity), unit_cost: x.is_title ? null : priced ? toPesos(Number(x.unit_cost_centavos)) : null, amount: x.is_title ? null : priced ? toPesos(Number(x.amount_centavos)) : list.length === 1 ? r.amount : null };
+      return { product_service: x.product_service, ...(x.is_title ? { is_title: true } : {}), ...(x.description ? { description: x.description } : {}), quantity: x.is_title ? null : Number(x.quantity), unit_cost: x.is_title ? null : priced ? toPesos(Number(x.unit_cost_centavos)) : null, amount: x.is_title ? null : priced ? toPesos(Number(x.amount_centavos)) : list.length === 1 ? r.amount : null };
     }) };
   });
 }
