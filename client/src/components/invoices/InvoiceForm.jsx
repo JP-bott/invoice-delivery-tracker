@@ -196,7 +196,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                 <span>Product/Service</span><span className="text-right">Unit Cost (₱)</span><span className="text-right">Qty</span><span className="text-right">Amount (₱)</span><span />
               </div>
               {items.map((it, i) => {
-                const pKey = `items_${i}_product_service`, dKey = `items_${i}_description`, uKey = `items_${i}_unit_cost`, qKey = `items_${i}_quantity`, line = priced.lines[i];
+                const pKey = `items_${i}_product_service`, uKey = `items_${i}_unit_cost`, qKey = `items_${i}_quantity`, line = priced.lines[i];
                 const mobileLabel = 'mb-0.5 block text-[11px] text-fg-subtle sm:hidden';
                 return (
                   <div key={i}>
@@ -224,11 +224,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                         <output aria-label={`Amount for item ${i + 1}`} className="num flex h-9 items-center justify-end truncate rounded-lg border border-line bg-surface-2 px-3 text-sm font-medium text-fg">{line.amount == null ? '—' : money(line.amount)}</output>
                       </div>
                     </div>
-                    <label htmlFor={`invoice-item-${i}-description`} className="mt-2 block text-xs font-medium text-fg-muted">
-                      Product Description <span className="font-normal text-fg-subtle">(optional)</span>
-                      <textarea id={`invoice-item-${i}-description`} aria-label={`Product description for item ${i + 1}`} rows={2} maxLength={500} placeholder="Specifications, scope, or other product details" {...aria(dKey)} className={`${cls(dKey)} mt-1 min-h-16 resize-y font-normal text-fg`} value={it.description ?? ''} onChange={(e) => setItem(i, { description: e.target.value })} />
-                    </label>
-                    {error(pKey)}{error(dKey)}{error(uKey)}{error(qKey)}
+                    {error(pKey)}{error(uKey)}{error(qKey)}
                   </div>
                 );
               })}
