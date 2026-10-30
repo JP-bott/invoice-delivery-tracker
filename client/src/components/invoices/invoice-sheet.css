@@ -41,6 +41,7 @@
 .inv-sheet .totals .grand { font-weight: 700; }
 .inv-sheet .note { font-size: 9pt; margin: 3px 0 0; }
 .inv-sheet .note b { font-weight: 800; }
+.inv-sheet .digital-copy-note { margin: 2px 0 0; font-size: 8pt; font-style: italic; color: #444; }
 .inv-sheet .sign { display: flex; justify-content: flex-end; margin-top: 26px; }
 .inv-sheet .sign .box { width: 58%; font-size: 8pt; text-align: center; }
 .inv-sheet .sign .line { display: flex; align-items: flex-end; font-size: 10pt; text-align: left; }
