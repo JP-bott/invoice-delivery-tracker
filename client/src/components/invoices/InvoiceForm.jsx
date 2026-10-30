@@ -4,7 +4,7 @@ import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
 import { valueOf } from '../../utils/customFields.js';
 import { MAX_ITEMS, blankItem, sanitizeDecimal } from '../../utils/items.js';
-import { priceItems } from '../../../../shared/pricing.js';
+import { priceInvoice } from '../../../../shared/pricing.js';
 import { dueDateFromDelivery } from '../../../../shared/dueDate.js';
 import { api } from '../../utils/api.js';
 import { splitInvoiceNo } from '../../utils/invoiceNo.js';
@@ -108,7 +108,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   const setTextRow = (i, patch) => setForm({ ...form, text_rows: textRows.map((r, j) => (i === j ? { ...r, ...patch } : r)) });
   const addTextRow = () => {
     const at = textRows.length;
-    setForm({ ...form, text_rows: [...textRows, { text: '', after_item: items.length }] });
+    setForm({ ...form, text_rows: [...textRows, { text: '', after_item: items.length, is_priced: false, quantity: '1', unit_cost: '' }] });
     requestAnimationFrame(() => document.getElementById(`invoice-text-row-${at}`)?.focus());
   };
   const removeTextRow = (i) => setForm({ ...form, text_rows: textRows.filter((_, j) => i !== j) });
@@ -119,8 +119,8 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
     [next[i], next[dest]] = [next[dest], next[i]];
     setForm({ ...form, text_rows: next });
   };
-  const priced = priceItems(items);
-  const total = priced.lines.reduce((sum, line) => sum + (line.amount ?? 0), 0); // invoice amount = sum of line amounts (VAT-inclusive, as before)
+  const priced = priceInvoice(items, textRows);
+  const total = priced.subtotal ?? 0; // invoice amount = sum of line amounts (VAT-inclusive, as before)
   const calculatedDueDate = dueDateFromDelivery(form.delivery_date) || '';
   const cls = (key) => `input ${errs[key] ? 'input-error' : ''}`;
   const aria = (key) => ({ 'aria-invalid': Boolean(errs[key]), 'aria-describedby': errs[key] ? `invoice-${key}-error` : undefined });
@@ -257,6 +257,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                           ? <button type="button" className="btn btn-secondary btn-icon sm:order-last" onClick={() => removeItem(i)} aria-label={`Remove item ${i + 1}`}><Trash2 size={16} aria-hidden="true" /></button>
                           : <span aria-hidden="true" className="sm:order-last" />}
                       </div>
+                      {!it.is_title && <>
                       <div className="min-w-0">
                         <span className={mobileLabel} aria-hidden="true">Unit cost (₱)</span>
                         <input id={`invoice-item-${i}-unit-cost`} type="text" inputMode="decimal" autoComplete="off" required aria-label={`Unit cost for item ${i + 1}`} placeholder="0.00" {...aria(uKey)} className={`${cls(uKey)} num text-right`} value={it.unit_cost ?? ''} onChange={(e) => setItem(i, { unit_cost: sanitizeDecimal(e.target.value, 2) })} onBlur={() => setItem(i, { unit_cost: formatAmount(it.unit_cost) })} />
@@ -269,7 +270,9 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                         <span className={mobileLabel} aria-hidden="true">Amount (₱)</span>
                         <output aria-label={`Amount for item ${i + 1}`} className="num flex h-9 items-center justify-end truncate rounded-lg border border-line bg-surface-2 px-3 text-sm font-medium text-fg">{line.amount == null ? '—' : money(line.amount)}</output>
                       </div>
+                      </>}
                     </div>
+                    <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" checked={Boolean(it.is_title)} onChange={(e) => setItem(i, { is_title: e.target.checked })} /> Use as title</label>
                     {error(pKey)}{error(uKey)}{error(qKey)}
                   </div>
                 );
@@ -281,10 +284,10 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
           </fieldset>
           <fieldset className="sm:col-span-2">
             <legend className="label mb-1.5 block">Additional nature of service text <span className="text-xs font-normal text-fg-subtle">(optional)</span></legend>
-            <p className="mb-3 text-xs text-fg-muted">Add separate, non-billable text rows for specifications, project details, or any supporting notes. Choose where each row appears in the invoice. These are not products and do not affect the total.</p>
+            <p className="mb-3 text-xs text-fg-muted">Add supporting notes or toggle Priced for billable specifications. Choose where each row appears in the invoice.</p>
             <div className="space-y-3">
               {textRows.map((entry, i) => {
-                const tKey = `text_rows_${i}_text`, pKey = `text_rows_${i}_after_item`;
+                const tKey = `text_rows_${i}_text`, pKey = `text_rows_${i}_after_item`, line = priced.textLines[i];
                 return (
                   <div key={i} className="rounded-xl border border-line bg-surface-2 p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
@@ -295,11 +298,17 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                         <button type="button" className="btn btn-secondary btn-icon !h-8 !w-8" onClick={() => removeTextRow(i)} aria-label={`Remove text row ${i + 1}`} title="Remove text row"><Trash2 size={15} aria-hidden="true" /></button>
                       </div>
                     </div>
+                    <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" checked={Boolean(entry.is_priced)} onChange={(e) => setTextRow(i, { is_priced: e.target.checked })} /> Priced</label>
                     <label className="label block" htmlFor={`invoice-text-row-${i}`}>
                       <span className="mb-1 block text-xs">Nature of service text</span>
                       <textarea id={`invoice-text-row-${i}`} rows={2} maxLength={2000} required placeholder="Enter text exactly as it should appear in its own invoice row" className={cls(tKey) + ' min-h-16 resize-y whitespace-pre-wrap'} value={entry.text} onChange={(e) => setTextRow(i, { text: e.target.value })} {...aria(tKey)} />
                       {error(tKey)}
                     </label>
+                    {entry.is_priced && <div className="grid grid-cols-3 gap-2">
+                      <label className="label">Qty<input id={`invoice-text-qty-${i}`} className="input" inputMode="decimal" value={entry.quantity ?? '1'} onChange={(e) => setTextRow(i, { quantity: sanitizeDecimal(e.target.value, 3) })} />{error(`text_rows_${i}_quantity`)}</label>
+                      <label className="label">Unit Price (₱)<input id={`invoice-text-price-${i}`} className="input" inputMode="decimal" value={entry.unit_cost ?? ''} onChange={(e) => setTextRow(i, { unit_cost: sanitizeDecimal(e.target.value, 2) })} />{error(`text_rows_${i}_unit_cost`)}</label>
+                      <div className="label">Amount (₱)<output className="input flex items-center justify-end">{line?.amount == null ? '—' : money(line.amount)}</output></div>
+                    </div>}
                     <label className="label block" htmlFor={`invoice-text-position-${i}`}>
                       <span className="mb-1 block text-xs">Place this row</span>
                       <select id={`invoice-text-position-${i}`} className={cls(pKey)} value={entry.after_item} onChange={(e) => setTextRow(i, { after_item: Number(e.target.value) })} {...aria(pKey)}>
