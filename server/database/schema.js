@@ -81,6 +81,16 @@ export const TEXT_ROW_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_invoice_text_rows_invoice ON invoice_text_rows(invoice_id, sort_order)`,
 ];
 
+// Additive columns for invoice title lines and optionally billable supporting text.
+// Existing rows default to ordinary products and unpriced text. Migration 010 mirrors these.
+export const ITEM_TITLE_COLUMN = 'is_title INTEGER NOT NULL DEFAULT 0 CHECK (is_title IN (0,1))';
+export const TEXT_PRICING_COLUMNS = [
+  'is_priced INTEGER NOT NULL DEFAULT 0 CHECK (is_priced IN (0,1))',
+  'quantity REAL',
+  'unit_cost_centavos INTEGER',
+  'amount_centavos INTEGER',
+];
+
 // Registered clients (Settings > Clients) that the Add Invoice form can suggest. migrations/005_clients.sql mirrors this and
 // INVOICE_CLIENT_COLUMNS; a test keeps them in sync. An invoice never points at a client row: it keeps its own copy of the
 // name, TIN and address (the snapshot taken when it was saved), so renaming or deleting a client never rewrites issued invoices.
