@@ -47,7 +47,7 @@ function cleanTextRows(body, errors, itemCount, existing = []) {
     }
     const is_priced = row?.is_priced === true;
     return { text, after_item: omitted ? Math.min(Math.max(after || 0, 0), itemCount) : after,
-      is_priced, ...(is_priced ? { quantity: row.quantity, unit_cost: row.unit_cost } : {}) };
+      ...(is_priced ? { is_priced: true, quantity: row.quantity, unit_cost: row.unit_cost } : {}) };
   });
 }
 
