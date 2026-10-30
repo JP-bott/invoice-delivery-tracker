@@ -24,7 +24,7 @@ function cleanItems(b, e, t) {
     else if (name.length > 200) e[`items_${i}_product_service`] = 'Must be 200 characters or fewer';
     if (line.errors.unit_cost) e[`items_${i}_unit_cost`] = line.errors.unit_cost;
     if (line.errors.quantity) e[`items_${i}_quantity`] = line.errors.quantity;
-    return { product_service: name, is_title: it?.is_title === true, quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000, unit_cost_centavos: line.unit, amount_centavos: line.amount };
+    return { product_service: name, ...(it?.is_title === true ? { is_title: true } : {}), quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000, unit_cost_centavos: line.unit, amount_centavos: line.amount };
   });
   if (b.items == null && e.items_0_unit_cost) e.amount = 'Valid amount required (max 2 decimals)';
   return { items, amount: priced.ok ? priced.subtotal : null };
