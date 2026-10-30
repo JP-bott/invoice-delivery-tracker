@@ -58,7 +58,7 @@ export function InvoiceSheet({ invoice, type, whtRate, vatExclusiveItems = false
         <tr><td className="c1 lbl">VAT-Amount</td><td className="c2 val">{show(t.vat, t.has && vatable)}</td><td className="lbl grand">Total Amount Due</td><td className="val grand">{show(t.grand)}</td></tr>
       </tbody></table>
       <p className="note">Note:&nbsp; Please make all checks payable to <b>QUANDATICS INC.</b></p>
-      <p className="digital-copy-note">This is a digital copy of the invoice only.</p>
+      <p className="digital-copy-note">Draft copy of invoice</p>
       <div className="sign"><div className="box"><div className="line">By:<span className="u" /></div>Authorized Signature Over Printed Name</div></div>
     </div>
   );
