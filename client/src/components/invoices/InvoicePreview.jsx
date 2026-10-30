@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react';
 import Modal from '../Modal.jsx';
 import { computeTotals } from '../../../../shared/pricing.js';
 import { money, sheetPricing } from '../../utils/sheetPricing.js';
+import { vatExclusiveItemRows } from '../../utils/previewVat.js';
 import { sheetInvoiceNo, invoiceDocumentTitle } from '../../utils/invoiceNo.js';
 import './invoice-sheet.css';
 
@@ -13,8 +14,10 @@ const longDate = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? new Intl.Date
 
 export { computeTotals };
 
-export function InvoiceSheet({ invoice, type, whtRate }) {
-  const { rows, total } = sheetPricing(invoice);
+export function InvoiceSheet({ invoice, type, whtRate, vatExclusiveItems = false }) {
+  const pricing = sheetPricing(invoice);
+  const { total } = pricing;
+  const rows = vatExclusiveItems && type === 'vatable' ? vatExclusiveItemRows(pricing.rows, total) : [...pricing.rows];
   const t = computeTotals(total, type, whtRate);
   const vatable = type === 'vatable';
   const invoiceNo = invoice.invoice_no || ''; // stored value ("SI - 0006"); the sheet shows only "No. 0006"
@@ -41,7 +44,7 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
         <tr><td colSpan="3"><div className="cell">TIN: <span className="v">{invoice.client_tin || ''}</span></div></td></tr>
       </tbody></table>
       <table className="items">
-        <thead><tr><th className="qty">QTY.</th><th>{isSalesInvoice ? 'NATURE OF GOODS' : 'NATURE OF SERVICE'}</th><th className="unit">UNIT<br />COST</th><th className="amt">AMOUNT</th></tr></thead>
+        <thead><tr><th className="qty">QTY.</th><th>{isSalesInvoice ? 'NATURE OF GOODS' : 'NATURE OF SERVICE'}</th><th className="unit">UNIT<br />COST</th><th className="amt">{vatExclusiveItems && vatable ? <>AMOUNT<br />(EXCL. VAT)</> : 'AMOUNT'}</th></tr></thead>
         <tbody>{rows.map((r, i) => <tr key={i}><td className="qty">{r.q}</td><td className={`d ${r.sub ? 'sub' : ''} ${r.note ? 'note-row' : ''}`}>{r.d}</td><td className="unit">{r.u}</td><td className="amt">{r.a}</td></tr>)}</tbody>
       </table>
       <table className="totals"><tbody>
@@ -63,6 +66,7 @@ export function InvoiceSheet({ invoice, type, whtRate }) {
 export default function InvoicePreview({ invoice, onClose }) {
   const [type, setType] = useState('vatable');
   const [wht, setWht] = useState('0');
+  const [vatExclusiveItems, setVatExclusiveItems] = useState(false);
   const [zoom, setZoom] = useState(1);
   const wrap = useRef(null);
   const whtRate = useMemo(() => parseFloat(wht) || 0, [wht]);
@@ -98,12 +102,15 @@ export default function InvoicePreview({ invoice, onClose }) {
         <label className="flex items-center gap-1.5 text-xs text-fg-muted">Withholding tax
           <select className="input !h-8 !w-auto !text-xs" value={wht} onChange={(e) => setWht(e.target.value)}>{[['0', 'None'], ['0.01', '1%'], ['0.02', '2%'], ['0.05', '5%'], ['0.1', '10%'], ['0.15', '15%']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         </label>
+        <label className="flex items-center gap-2 text-xs text-fg-muted" title="Show product line amounts before VAT. Unit costs remain VAT-inclusive.">
+          <input type="checkbox" role="switch" aria-label="Show item amounts excluding VAT" checked={vatExclusiveItems} onChange={(e) => setVatExclusiveItems(e.target.checked)} disabled={type !== 'vatable' || totalOnly} className="h-4 w-4 accent-[var(--brand)]" /> Exclude VAT from item amounts
+        </label>
         <span className="mr-auto" />
         <button type="button" data-autofocus className="btn btn-primary" onClick={print}><Printer size={15} aria-hidden="true" />Print</button>
       </>}>
-      <p className="text-xs text-fg-subtle" data-print-hide>Sale type and withholding tax only change this preview and are not saved with the invoice.{totalOnly && ' This invoice was saved before unit costs were recorded, so its amount is shown as the total only; edit it to enter unit costs.'}</p>
+      <p className="text-xs text-fg-subtle" data-print-hide>Sale type, withholding tax and the item VAT switch only change this preview and are not saved with the invoice. The switch shows net-of-VAT line amounts; unit costs remain VAT-inclusive.{type !== 'vatable' && ' The item VAT switch is only available for VATable sales.'}{totalOnly && ' This invoice was saved before unit costs were recorded, so its amount is shown as the total only; edit it to enter unit costs.'}</p>
       <div ref={wrap} className="-mx-5 overflow-x-hidden rounded-lg bg-surface-3 p-3 sm:mx-0" data-print-body>
-        <div style={{ zoom }} className="inv-zoom"><InvoiceSheet invoice={invoice} type={type} whtRate={whtRate} /></div>
+        <div style={{ zoom }} className="inv-zoom"><InvoiceSheet invoice={invoice} type={type} whtRate={whtRate} vatExclusiveItems={vatExclusiveItems} /></div>
       </div>
     </Modal>
   );
