@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Eye, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Eye, Loader2, Plus, Trash2 } from 'lucide-react';
 import { STATUSES } from '../../utils/constants.js';
 import { formatAmount } from '../../utils/money.js';
 import { valueOf } from '../../utils/customFields.js';
@@ -12,6 +12,7 @@ import Modal from '../Modal.jsx';
 import { HoverCard } from '../ui.jsx';
 import InvoicePreview from './InvoicePreview.jsx';
 import ClientCombobox from './ClientCombobox.jsx';
+import { INVOICE_STEPS, invoiceStepIssue, firstInvoiceStepIssue, invoiceStepForError } from '../../utils/invoiceWizard.js';
 
 const required = new Set(['date_issued', 'client_name']);
 const TERMS = '30-days'; // display only: the server always saves 30-days
@@ -33,6 +34,43 @@ function Group({ id, title, description, children }) {
 
 export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, products = [], clients = [], fields = [], saving = false }) {
   const [preview, setPreview] = useState(false);
+  const [step, setStep] = useState(0);
+  const [stepMessage, setStepMessage] = useState('');
+  const navigateStep = (target) => {
+    if (saving || target === step) return;
+    if (target > step) {
+      for (let index = 0; index < target; index++) {
+        const problem = invoiceStepIssue(form, index, fields);
+        if (problem) {
+          setStep(index);
+          setStepMessage(problem.message);
+          return;
+        }
+      }
+    }
+    setStep(target);
+    setStepMessage('');
+  };
+  useEffect(() => {
+    const errors = Object.keys(errs || {});
+    if (errors.length) {
+      setStep(Math.min(...errors.map(invoiceStepForError)));
+      setStepMessage('Review the highlighted fields before saving.');
+    }
+  }, [errs]);
+  const submitWizard = (event) => {
+    event.preventDefault();
+    if (saving) return;
+    const problem = firstInvoiceStepIssue(form, fields);
+    if (problem) {
+      setStep(problem.step);
+      setStepMessage(problem.message);
+    } else if (step < INVOICE_STEPS.length - 1) {
+      navigateStep(step + 1);
+    } else {
+      onSave();
+    }
+  };
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
   // Invoice numbers are assigned by the server when the invoice is saved. For a new invoice this is only a suggestion (a read-only
   // request that consumes nothing), refreshed whenever the type changes; an existing invoice always shows its stored number.
@@ -143,17 +181,22 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   };
 
   return (
-    <Modal title={`${form.id ? 'Edit' : 'Add'} invoice`} description={form.id ? `Update ${form.invoice_no || 'this invoice'}.` : 'Record a new invoice and its delivery details.'} onClose={onCancel} width="max-w-2xl" dismissOnBackdrop={false}
+    <Modal title={`${form.id ? 'Edit' : 'Add'} invoice`} description={form.id ? `Update ${form.invoice_no || 'this invoice'}.` : 'Record a new invoice and its delivery details.'} onClose={onCancel} width="max-w-3xl" dismissOnBackdrop={false}
       footer={<>
         <HoverCard content="Preview invoice" width="w-auto">
           <button type="button" className="btn btn-secondary btn-icon" onClick={() => setPreview(true)} aria-label="Preview invoice" aria-haspopup="dialog"><Eye size={17} aria-hidden="true" /></button>
         </HoverCard>
-        <p className="mr-auto hidden text-xs text-fg-muted sm:block"><span className="text-danger">*</span> Required</p>
-        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
-        <button type="submit" form="invoice-form" className="btn btn-primary min-w-32" disabled={saving}>{saving && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add invoice'}</button>
+        <span className="mr-auto text-xs text-fg-muted">Step {step + 1} of {INVOICE_STEPS.length}</span>
+        {step > 0 && <button type="button" className="btn btn-secondary" onClick={() => navigateStep(step - 1)} disabled={saving}><ArrowLeft size={15}/> Back</button>}
+        <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>Cancel</button>
+        <button type="submit" form="invoice-form" className="btn btn-primary min-w-32" disabled={saving}>{saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true"/> : step === 5 ? <Check size={15}/> : <ArrowRight size={15}/>} {saving ? 'Saving…' : step === 5 ? (form.id ? 'Save changes' : 'Add invoice') : 'Continue'}</button>
       </>}>
-      <form id="invoice-form" onSubmit={(event) => { event.preventDefault(); if (!saving) onSave(); }} className="space-y-6" noValidate={false}>
-        <Group id="invoice-details-heading" title="Invoice details" description="Identify the transaction.">
+      <nav aria-label="Invoice form steps" className="mb-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {INVOICE_STEPS.map((item, i) => <button key={item.id} type="button" disabled={saving} onClick={() => navigateStep(i)} aria-current={step === i ? 'step' : undefined} className={`rounded-lg border px-2 py-2 text-left text-xs ${step === i ? 'border-[var(--brand)] bg-surface-2 font-semibold text-fg' : 'border-line text-fg-muted hover:bg-surface-2'}`}><span className="mb-1 block text-[10px] opacity-75">{i + 1} / 6</span><span className="block truncate">{item.label}</span></button>)}
+      </nav>
+      <div className="mb-5"><div className="h-1.5 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-label="Invoice step progress" aria-valuemin={0} aria-valuemax={6} aria-valuenow={step + 1}><div className="h-full rounded-full bg-[var(--brand)] transition-all" style={{ width: `${(step + 1) / 6 * 100}%` }}/></div><h3 className="mt-4 text-base font-semibold text-fg">{INVOICE_STEPS[step].title}</h3><p className="mt-1 text-sm text-fg-muted">{INVOICE_STEPS[step].description}</p>{stepMessage && <p role="alert" className="mt-2 text-sm text-warning-ink">{stepMessage}</p>}</div>
+      <form id="invoice-form" onSubmit={submitWizard} className="space-y-5" noValidate>
+        <div className={step === 0 ? "" : "hidden"}><Group id="invoice-details-heading" title="Invoice details" description="Identify the transaction.">
           {field('date_issued', 'Date Issued', 'date')}
           <div className="label">
             <label htmlFor="invoice_number" className="mb-1.5 block">Invoice No.<span className="ml-1.5 text-xs font-normal text-fg-subtle">{isNew ? 'Auto-suggested, editable' : 'Editable number'}</span></label>
@@ -176,7 +219,8 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             <input id="invoice-terms" type="text" readOnly tabIndex={-1} aria-readonly="true" className="input bg-surface-2 text-fg-muted" value={TERMS} />
           </label>
         </Group>
-        <Group id="invoice-client-heading" title="Client & delivery" description="Who it is for and what was delivered.">
+        </div>
+        <div className={step === 1 ? "" : "hidden"}><Group id="invoice-client-heading" title="Client & delivery" description="Who it is for and what was delivered.">
           <div className="label">
             <label htmlFor="invoice-client_name" className="mb-1.5 block">Client Name{star('client_name')}</label>
             <ClientCombobox id="invoice-client_name" value={form.client_name} tin={form.client_tin ?? ''} address={form.client_address ?? ''} clients={clients} invalid={Boolean(errs.client_name)}
@@ -189,6 +233,8 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             <input id="invoice-due_date" type="text" readOnly tabIndex={-1} aria-readonly="true" className="input bg-surface-2 text-fg-muted" value={calculatedDueDate} placeholder="Awaiting delivery date" />
             <span className="mt-1 block text-xs font-normal text-fg-muted">30 calendar days after Delivery Date.</span>
           </label>
+        </Group></div>
+        <div className={step === 2 ? "" : "hidden"}><Group id="invoice-items-heading" title="Products & services" description="Billable items and supporting text.">
           <fieldset className="sm:col-span-2" aria-describedby={errs.product_service ? 'invoice-product_service-error' : undefined}>
             <legend className="label mb-1.5 block">Products/Services<span className="ml-0.5 text-danger" aria-hidden="true">*</span></legend>
             <div className="space-y-2">
@@ -270,7 +316,8 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             <button type="button" className="btn btn-secondary mt-2.5" onClick={addTextRow} disabled={textRows.length >= 50}><Plus size={15} aria-hidden="true" />Add description-only row</button>
           </fieldset>
         </Group>
-        <Group id="payment-heading" title="Payment" description="Amount billed, received and current payment state.">
+        </div>
+        <div className={step === 3 ? "" : "hidden"}><Group id="payment-heading" title="Payment" description="Amount billed, received and current payment state.">
           <div className="label">
             <span className="mb-1.5 block" id="invoice-amount-label">Invoice Amount<span className="ml-1.5 text-xs font-normal text-fg-subtle">Calculated</span></span>
             <output id="invoice-amount" aria-labelledby="invoice-amount-label" aria-live="polite" className="num flex h-9 items-center justify-between rounded-lg border border-line bg-surface-2 px-3 text-sm font-semibold text-fg"><span aria-hidden="true" className="font-normal text-fg-subtle">₱</span>{money(total)}</output>
@@ -286,11 +333,19 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             {form.payment_status !== 'Cancelled' && hint(total / 100, form.amount_paid) !== form.payment_status && <p className="self-end pb-2 text-xs text-warning-ink" role="status">Suggested status: {hint(total / 100, form.amount_paid)}</p>}
           </>}
         </Group>
+        </div>
+        <div className={step === 4 ? "" : "hidden"}>
         {fields.length > 0 && <Group id="custom-fields-heading" title="Additional details" description="Custom fields from Settings.">{fields.map(customField)}</Group>}
         <label className="label block" htmlFor="invoice-remarks">
           <span className="mb-1.5 block">Remarks<span className="ml-1.5 text-xs font-normal text-fg-subtle">Optional</span></span>
           <textarea id="invoice-remarks" rows="3" className="input resize-y" value={form.remarks} onChange={set('remarks')} placeholder="Add delivery notes or payment details" />
-        </label>
+        </label></div>
+        {step === 5 && <section aria-label="Review invoice" className="space-y-4">
+          <div className="rounded-xl border border-line bg-surface-2 p-4"><div className="flex justify-between gap-2"><strong>Invoice & client</strong><button type="button" className="text-xs underline" onClick={() => navigateStep(0)}>Edit</button></div><p className="mt-2 text-sm">{shownNo || 'Number assigned on save'} · {form.date_issued}</p><p className="text-sm">{form.client_name} · Delivery: {form.delivery_date || 'Not set'}</p></div>
+          <div className="rounded-xl border border-line p-4"><div className="flex justify-between gap-2"><strong>Products & services</strong><button type="button" className="text-xs underline" onClick={() => navigateStep(2)}>Edit</button></div>{items.map((item, i) => <div key={i} className="mt-2 flex justify-between gap-2 text-sm"><span>{item.product_service} × {item.quantity}</span><span>₱{priced.lines[i]?.amount == null ? '—' : money(priced.lines[i].amount)}</span></div>)}<p className="mt-2 text-xs text-fg-muted">{textRows.length} supporting description-only row(s)</p><div className="mt-3 flex justify-between border-t border-line pt-3 font-semibold"><span>Invoice total</span><span>₱{money(total)}</span></div></div>
+          <div className="rounded-xl border border-line bg-surface-2 p-4"><div className="flex justify-between gap-2"><strong>Payment & additional information</strong><button type="button" className="text-xs underline" onClick={() => navigateStep(3)}>Edit</button></div><p className="mt-2 text-sm">{form.payment_status} · Paid ₱{formatAmount(form.amount_paid || '0')}</p>{form.remarks && <p className="mt-2 whitespace-pre-wrap text-sm">{form.remarks}</p>}{fields.length > 0 && <button type="button" className="mt-2 text-xs underline" onClick={() => navigateStep(4)}>Edit custom fields</button>}</div>
+          <p className="text-xs text-fg-muted">Use Preview to inspect the invoice before saving.</p>
+        </section>}
       </form>
       {preview && <InvoicePreview invoice={{ ...form, invoice_no: shownNo, terms: TERMS }} onClose={() => setPreview(false)} />}
     </Modal>
