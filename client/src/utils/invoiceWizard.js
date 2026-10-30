@@ -1,4 +1,4 @@
-import { parseUnitCost, priceItems } from '../../../shared/pricing.js';
+import { parseUnitCost, priceInvoice } from '../../../shared/pricing.js';
 import { valueOf } from './customFields.js';
 
 // All steps share the existing invoice form model. Nothing is saved until Review.
@@ -42,7 +42,7 @@ export function invoiceStepIssue(form, step, fields = []) {
   if (step === 2) {
     const items = Array.isArray(form.items) ? form.items : [];
     if (!items.length) return issue('Add at least one product or service.', 'invoice-items-heading');
-    const priced = priceItems(items);
+    const priced = priceInvoice(items, form.text_rows || []);
     for (let i = 0; i < items.length; i++) {
       if (!filled(items[i]?.product_service)) return issue(`Select a product or service for item ${i + 1}.`, `invoice-item-${i}-product`);
       if (String(items[i].product_service).trim().length > 200) return issue('Product or service names must be 200 characters or fewer.', `invoice-item-${i}-product`);
@@ -54,6 +54,11 @@ export function invoiceStepIssue(form, step, fields = []) {
     for (let i = 0; i < rows.length; i++) {
       if (!filled(rows[i]?.text)) return issue(`Enter text for description-only row ${i + 1} or remove it.`, `invoice-text-row-${i}`);
       if (String(rows[i].text).trim().length > 2000) return issue(`Description-only row ${i + 1} is too long.`, `invoice-text-row-${i}`);
+      if (rows[i]?.is_priced === true) {
+        if (priced.textLines[i].errors.quantity) return issue('Enter a valid priced description quantity.', `invoice-text-qty-${i}`);
+        if (priced.textLines[i].errors.unit_cost) return issue('Enter a valid priced description unit cost.', `invoice-text-price-${i}`);
+        if (Number(rows[i]?.after_item) < 1) return issue('Place priced description beneath a product.', `invoice-text-position-${i}`);
+      }
       const after = Number(rows[i]?.after_item);
       if (!Number.isInteger(after) || after < 0 || after > items.length) return issue(`Choose a valid position for description-only row ${i + 1}.`, `invoice-text-position-${i}`);
     }
@@ -63,7 +68,7 @@ export function invoiceStepIssue(form, step, fields = []) {
     if (!['Pending', 'Partially Paid', 'Paid', 'Cancelled'].includes(status)) return issue('Choose a valid payment status.', 'invoice-payment_status');
     const paid = parseUnitCost(form.amount_paid ?? '0');
     if (paid === null) return issue('Enter a valid Amount Paid (maximum 2 decimals).', 'invoice-amount_paid');
-    const total = priceItems(form.items || []).subtotal;
+    const total = priceInvoice(form.items || [], form.text_rows || []).subtotal;
     if (total != null) {
       if (paid > total) return issue('Amount Paid cannot exceed Invoice Amount.', 'invoice-amount_paid');
       if (status === 'Pending' && paid !== 0) return issue('Amount Paid must be zero when Pending.', 'invoice-payment_status');

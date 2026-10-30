@@ -28,7 +28,7 @@ const splitInvoiceNumber = (invoiceNo = '') => ({ invoice_prefix: splitInvoiceNo
 // Items for editing: saved unit costs as they are; invoices saved before unit costs existed get one only when it is exact.
 const editItems = (r) => {
   const list = Array.isArray(r.items) && r.items.length ? r.items : [{ product_service: r.product_service, quantity: 1, unit_cost: r.amount }];
-  return list.map((it) => ({ product_service: it.product_service, quantity: String(it.quantity || 1), unit_cost: it.unit_cost != null ? formatAmount(it.unit_cost) : list.length === 1 ? formatAmount(deriveUnitCost(r.amount, it.quantity)) : '' }));
+  return list.map((it) => ({ product_service: it.product_service, is_title: Boolean(it.is_title), quantity: it.is_title ? '1' : String(it.quantity || 1), unit_cost: it.unit_cost != null ? formatAmount(it.unit_cost) : list.length === 1 ? formatAmount(deriveUnitCost(r.amount, it.quantity)) : '' }));
 };
 
 export default function Invoices() {
@@ -119,7 +119,7 @@ export default function Invoices() {
     setDeleting(false); setDel(null);
   };
   const openAdd = () => { reloadFields(); loadClients(); setForm(newForm()); setErrs({}); };
-  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), invoice_number_override: null, amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', client_tin: r.client_tin ?? '', client_address: r.client_address ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', items: editItems(r), text_rows: r.text_rows || [], custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); loadClients(); setErrs({}); };
+  const openEdit = (r) => { setForm({ ...r, ...splitInvoiceNumber(r.invoice_no), invoice_number_override: null, amount_paid: formatAmount(r.amount_paid), cr_no: r.cr_no ?? '', client_tin: r.client_tin ?? '', client_address: r.client_address ?? '', delivery_date: r.delivery_date ?? '', remarks: r.remarks ?? '', items: editItems(r), text_rows: (r.text_rows || []).map(row => ({ ...row, quantity: String(row.quantity ?? '1'), unit_cost: row.unit_cost == null ? '' : formatAmount(row.unit_cost) })), custom_fields: { ...(r.custom_fields || {}) } }); reloadFields(); loadClients(); setErrs({}); };
   const onSort = (k) => setSort({ sortBy: k, sortDir: sort.sortBy === k && sort.sortDir === 'asc' ? 'desc' : 'asc' });
   const clearFilters = () => { setF(noFilters); setSearchParams({}); };
   const filtered = Object.keys(dq).some((k) => dq[k]);

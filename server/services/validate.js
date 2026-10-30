@@ -1,7 +1,7 @@
 import { toCentavos } from './money.js';
 import { formatInvoiceNo, isInvoicePrefix, splitInvoiceNo } from '../../shared/invoiceNumber.js';
 import { FIXED_TERMS } from '../database/schema.js';
-import { MAX_ITEMS, priceItems } from '../../shared/pricing.js';
+import { MAX_ITEMS, priceInvoice } from '../../shared/pricing.js';
 import { dueDateFromDelivery } from '../../shared/dueDate.js';
 export const STATUSES = ['Pending', 'Partially Paid', 'Paid', 'Cancelled'];
 export const dateOk = (s) => dueDateFromDelivery(s) !== null;
@@ -17,14 +17,14 @@ function cleanItems(b, e, t) {
   if (raw == null) raw = t(b.product_service) ? [{ product_service: b.product_service, quantity: 1, unit_cost: b.amount ?? '' }] : [];
   if (!Array.isArray(raw) || !raw.length) { e.product_service = 'Required'; return { items: [], amount: null }; }
   if (raw.length > MAX_ITEMS) { e.product_service = `At most ${MAX_ITEMS} items per invoice`; return { items: [], amount: null }; }
-  const priced = priceItems(raw.map((it) => ({ unit_cost: it?.unit_cost, quantity: it?.quantity })));
+  const priced = priceInvoice(raw);
   const items = raw.map((it, i) => {
     const name = t(it?.product_service), line = priced.lines[i];
     if (!name) e[`items_${i}_product_service`] = 'Required';
     else if (name.length > 200) e[`items_${i}_product_service`] = 'Must be 200 characters or fewer';
     if (line.errors.unit_cost) e[`items_${i}_unit_cost`] = line.errors.unit_cost;
     if (line.errors.quantity) e[`items_${i}_quantity`] = line.errors.quantity;
-    return { product_service: name, quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000, unit_cost_centavos: line.unit, amount_centavos: line.amount };
+    return { product_service: name, ...(it?.is_title === true ? { is_title: true } : {}), quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000, unit_cost_centavos: line.unit, amount_centavos: line.amount };
   });
   if (b.items == null && e.items_0_unit_cost) e.amount = 'Valid amount required (max 2 decimals)';
   return { items, amount: priced.ok ? priced.subtotal : null };
@@ -45,7 +45,9 @@ function cleanTextRows(body, errors, itemCount, existing = []) {
     if (!Number.isInteger(after) || after < 0 || (!omitted && after > itemCount)) {
       errors[`text_rows_${i}_after_item`] = 'Choose a valid position';
     }
-    return { text, after_item: omitted ? Math.min(Math.max(after || 0, 0), itemCount) : after };
+    const is_priced = row?.is_priced === true;
+    return { text, after_item: omitted ? Math.min(Math.max(after || 0, 0), itemCount) : after,
+      ...(is_priced ? { is_priced: true, quantity: row.quantity, unit_cost: row.unit_cost } : {}) };
   });
 }
 
@@ -106,9 +108,18 @@ export function validateInvoice(b = {}, ctx = {}) {
       ? { ...item, description: old.description } : item;
   });
   v.text_rows = cleanTextRows(b, e, v.items.length, ctx.existing?.text_rows || []);
+  const combined = priceInvoice(b.items == null ? [{ product_service: b.product_service, unit_cost: b.amount, quantity: 1 }] : b.items, v.text_rows);
+  combined.textLines.forEach((line, i) => {
+    if (!v.text_rows[i].is_priced) return;
+    if (v.text_rows[i].after_item < 1) e[`text_rows_${i}_after_item`] = 'Priced descriptions must be placed under a product';
+    if (line.errors.quantity) e[`text_rows_${i}_quantity`] = line.errors.quantity;
+    if (line.errors.unit_cost) e[`text_rows_${i}_unit_cost`] = line.errors.unit_cost;
+    v.text_rows[i] = { ...v.text_rows[i], quantity: line.qtyMilli == null ? null : line.qtyMilli / 1000,
+      unit_cost_centavos: line.unit, amount_centavos: line.amount };
+  });
   v.product_service = v.items.map((it) => it.product_service).filter(Boolean).join(', ');
   if (!STATUSES.includes(v.payment_status)) e.payment_status = 'Invalid status';
-  const amt = priced.amount; // derived from the line items; a submitted `amount` is ignored when items are sent
+  const amt = combined.subtotal; // derived from the line items; a submitted `amount` is ignored when items are sent
   let paid;
   try { paid = toCentavos(b.amount_paid ?? 0); } catch { e.amount_paid = 'Valid amount required (max 2 decimals)'; }
   if (amt != null && paid != null) {
