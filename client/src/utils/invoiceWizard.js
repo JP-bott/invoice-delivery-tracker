@@ -52,6 +52,7 @@ export function invoiceStepIssue(form, step, fields = []) {
     const rows = Array.isArray(form.text_rows) ? form.text_rows : [];
     if (rows.length > 50) return issue('Only 50 description-only rows are allowed.', 'invoice-items-heading');
     for (let i = 0; i < rows.length; i++) {
+      if (rows[i]?.kind === 'space') continue;
       if (!filled(rows[i]?.text)) return issue(`Enter text for description-only row ${i + 1} or remove it.`, `invoice-text-row-${i}`);
       if (String(rows[i].text).trim().length > 2000) return issue(`Description-only row ${i + 1} is too long.`, `invoice-text-row-${i}`);
       if (rows[i]?.is_priced === true) {
