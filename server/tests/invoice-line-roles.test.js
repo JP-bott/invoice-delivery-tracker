@@ -3,7 +3,8 @@ import { createClient } from '@libsql/client';
 import { priceInvoice, computeTotals } from '../../shared/pricing.js';
 import { sheetPricing } from '../../client/src/utils/sheetPricing.js';
 import { validateInvoice } from '../services/validate.js';
-import { initSchema } from '../database/db.js';
+import { initSchema, resetDb } from '../database/db.js';
+import { handle } from '../handler.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -54,6 +55,36 @@ describe('invoice title rows and billable descriptions', () => {
     expect(off.errors).toEqual({});
     expect(off.value.amount_centavos).toBe(0);
     expect(off.value.text_rows[0].unit_cost_centavos).toBeUndefined();
+  });
+  it('saves, reloads, edits and preserves SI invoice numbering and priced rows', async () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'invoice-role-api-')), 'data.db');
+    process.env.TURSO_DATABASE_URL = 'file:' + file;
+    resetDb();
+    const send = (method, route, body) => handle({ method, path: route, body });
+    const created = await send('POST', '/api/invoices', { ...base, items: [product], text_rows: descriptions });
+    expect(created.status).toBe(201);
+    expect(created.body.invoice_no).toMatch(/^SI - /);
+    expect(created.body.amount).toBe(6000);
+    const id = created.body.id;
+    const fresh = await send('GET', '/api/invoices/' + id);
+    expect(fresh.body.items[0]).toMatchObject({ product_service: 'ChatGPT Plus', is_title: true });
+    expect(fresh.body.text_rows[0]).toMatchObject({ is_priced: true, quantity: 1, unit_cost: 1000, amount: 1000 });
+    const editing = await send('PUT', '/api/invoices/' + id, {
+      ...base, items: [product],
+      text_rows: [{ ...descriptions[0], is_priced: false }, descriptions[1]],
+    });
+    expect(editing.status).toBe(200);
+    expect(editing.body.invoice_no).toBe(created.body.invoice_no);
+    expect(editing.body.amount).toBe(5000);
+    expect(editing.body.text_rows[0].is_priced).toBeUndefined();
+    expect(editing.body.text_rows[0].amount).toBeUndefined();
+    const db = createClient({ url: 'file:' + file });
+    try {
+      const row = (await db.execute({ sql: 'SELECT is_priced, unit_cost_centavos, amount_centavos FROM invoice_text_rows WHERE invoice_id = ? AND sort_order = 0', args: [id] })).rows[0];
+      expect(Number(row.is_priced)).toBe(0);
+      expect(row.unit_cost_centavos).toBeNull();
+      expect(row.amount_centavos).toBeNull();
+    } finally { db.close(); }
   });
   it('applies the additive migration twice without changing legacy rows', async () => {
     const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'invoice-roles-')), 'data.db');
