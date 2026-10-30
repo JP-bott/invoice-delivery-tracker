@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client';
-import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS, ITEM_DESCRIPTION_COLUMN, TEXT_ROW_STATEMENTS, CLIENT_STATEMENTS, INVOICE_CLIENT_COLUMNS, SEQUENCE_STATEMENTS, SEQUENCE_PREFIXES, INVOICE_TERMS_COLUMN, PAYMENT_TIMELINE_STATEMENTS } from './schema.js';
+import { SCHEMA_STATEMENTS, CUSTOM_FIELD_STATEMENTS, ITEM_STATEMENTS, ITEM_PRICING_COLUMNS, ITEM_DESCRIPTION_COLUMN, ITEM_TITLE_COLUMN, TEXT_ROW_STATEMENTS, TEXT_PRICING_COLUMNS, CLIENT_STATEMENTS, INVOICE_CLIENT_COLUMNS, SEQUENCE_STATEMENTS, SEQUENCE_PREFIXES, INVOICE_TERMS_COLUMN, PAYMENT_TIMELINE_STATEMENTS } from './schema.js';
 import { sequenceOf } from '../../shared/invoiceNumber.js';
 import { seedStages } from '../services/paymentTimelineService.js';
 
@@ -41,6 +41,12 @@ export async function initSchema(c = getDb()) {
   const itemColumns = new Set((await c.execute('PRAGMA table_info(invoice_items)')).rows.map((column) => column.name));
   for (const name of ITEM_PRICING_COLUMNS) if (!itemColumns.has(name)) await c.execute(`ALTER TABLE invoice_items ADD COLUMN ${name} INTEGER`);
   if (!itemColumns.has('description')) await c.execute(`ALTER TABLE invoice_items ADD COLUMN ${ITEM_DESCRIPTION_COLUMN}`);
+  if (!itemColumns.has('is_title')) await c.execute(`ALTER TABLE invoice_items ADD COLUMN ${ITEM_TITLE_COLUMN}`);
+  const textColumns = new Set((await c.execute('PRAGMA table_info(invoice_text_rows)')).rows.map((column) => column.name));
+  for (const definition of TEXT_PRICING_COLUMNS) {
+    const name = definition.split(' ')[0];
+    if (!textColumns.has(name)) await c.execute(`ALTER TABLE invoice_text_rows ADD COLUMN ${definition}`);
+  }
   const marker = (await c.execute({ sql: 'SELECT value FROM schema_meta WHERE key = ?', args: ['product_options_seeded'] })).rows[0];
   if (!marker) {
     const now = new Date().toISOString();
