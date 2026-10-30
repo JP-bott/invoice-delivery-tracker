@@ -40,13 +40,15 @@ function cleanTextRows(body, errors, itemCount, existing = []) {
   return raw.map((row, i) => {
     const text = typeof row?.text === 'string' ? row.text.trim() : '';
     const after = Number(row?.after_item);
-    if (!text) errors[`text_rows_${i}_text`] = 'Description text is required';
+    if (row?.kind !== 'space' && !text) errors[`text_rows_${i}_text`] = 'Description text is required';
     else if (text.length > 2000) errors[`text_rows_${i}_text`] = 'Must be 2000 characters or fewer';
     if (!Number.isInteger(after) || after < 0 || (!omitted && after > itemCount)) {
       errors[`text_rows_${i}_after_item`] = 'Choose a valid position';
     }
-    const is_priced = row?.is_priced === true;
-    return { text, after_item: omitted ? Math.min(Math.max(after || 0, 0), itemCount) : after,
+    if (row?.kind != null && !['description', 'space'].includes(row.kind)) errors[`text_rows_${i}_kind`] = 'Invalid row type';
+    if (row?.kind === 'space' && row.is_priced === true) errors[`text_rows_${i}_kind`] = 'Blank rows cannot be priced';
+    const is_priced = row?.kind !== 'space' && row?.is_priced === true;
+    return { text, ...(row?.kind === 'space' ? { kind: 'space' } : {}), after_item: omitted ? Math.min(Math.max(after || 0, 0), itemCount) : after,
       ...(is_priced ? { is_priced: true, quantity: row.quantity, unit_cost: row.unit_cost } : {}) };
   });
 }
