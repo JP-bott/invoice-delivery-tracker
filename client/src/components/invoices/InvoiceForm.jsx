@@ -6,7 +6,7 @@ import { valueOf } from '../../utils/customFields.js';
 import { MAX_ITEMS, blankItem, sanitizeDecimal } from '../../utils/items.js';
 import { priceInvoice } from '../../../../shared/pricing.js';
 import { sheetPricing } from '../../utils/sheetPricing.js';
-import { orderedInvoiceLines, appendProduct, insertSupportingLine, moveProductGroup, moveSupportingLine, removeProduct, blankSpace, blankDescription } from '../../utils/invoiceLines.js';
+import { orderedInvoiceLines, appendProduct, insertSupportingLine, moveProductGroup, moveSupportingLine, removeProduct, deleteInvoiceLine, blankSpace, blankDescription } from '../../utils/invoiceLines.js';
 import { dueDateFromDelivery } from '../../../../shared/dueDate.js';
 import { api } from '../../utils/api.js';
 import { splitInvoiceNo } from '../../utils/invoiceNo.js';
@@ -121,6 +121,10 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   const moveTextRow = (i, direction) => {
     const next = moveSupportingLine(items, textRows, i, direction);
     if (next) setForm({ ...form, ...next });
+  };
+  const deleteLine = (line) => {
+    const changed = deleteInvoiceLine(items, textRows, line);
+    if (changed) setForm({ ...form, ...changed });
   };
   const orderedLines = orderedInvoiceLines(items, textRows);
   const priced = priceInvoice(items, textRows);
@@ -249,8 +253,12 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                 const pKey = `items_${i}_product_service`, uKey = `items_${i}_unit_cost`, qKey = `items_${i}_quantity`, line = priced.lines[i];
                 const mobileLabel = 'mb-0.5 block text-[11px] text-fg-subtle sm:hidden';
                 return (
-                  <div key={i}>
-                    <div className="grid grid-cols-3 items-start gap-2 sm:grid-cols-[minmax(0,1fr)_7.5rem_5rem_7.5rem_2.25rem]">
+                  <details key={i} open={undefined} className="group rounded-xl border border-line bg-surface-2/40 p-3">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-fg">
+                      <span className="min-w-0 truncate">Product {i + 1}: {it.product_service || 'Select product/service'}{it.is_title ? ' · Title' : ''}</span>
+                      <span className="shrink-0 text-xs text-fg-muted">{it.is_title ? 'No charge' : line.amount == null ? 'Edit details' : '₱' + money(line.amount)} · Edit</span>
+                    </summary>
+                    <div className="mt-3 grid grid-cols-3 items-start gap-2 sm:grid-cols-[minmax(0,1fr)_7.5rem_5rem_7.5rem_2.25rem]">
                       <div className="col-span-3 flex items-start gap-2 sm:contents">
                         <select id={`invoice-item-${i}-product`} aria-label={`Product or service ${i + 1}`} required {...aria(pKey)} className={`${cls(pKey)} min-w-0 flex-1 sm:flex-none`} value={it.product_service} onChange={(e) => setItem(i, { product_service: e.target.value })}>
                           <option value="">{products.length ? 'Select a product or service' : 'No options configured'}</option>
@@ -278,7 +286,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                     </div>
                     <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" checked={Boolean(it.is_title)} onChange={(e) => setItem(i, { is_title: e.target.checked })} /> Use as title</label>
                     {error(pKey)}{error(uKey)}{error(qKey)}
-                  </div>
+                  </details>
                 );
               })}
             </div>
@@ -293,7 +301,12 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
               {textRows.map((entry, i) => {
                 const tKey = `text_rows_${i}_text`, pKey = `text_rows_${i}_after_item`, line = priced.textLines[i];
                 return (
-                  <div key={i} className="rounded-xl border border-line bg-surface-2 p-3 space-y-2">
+                  <details key={i} className="rounded-xl border border-line bg-surface-2 p-3">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm text-fg">
+                      <span className="min-w-0 truncate">{entry.kind === 'space' ? 'Blank row' : entry.text || 'New description'}</span>
+                      <span className="shrink-0 text-xs text-fg-muted">{entry.is_priced ? line?.amount == null ? 'Priced' : '₱' + money(line.amount) : entry.kind === 'space' ? 'Spacer' : 'Text only'} · Edit</span>
+                    </summary>
+                    <div className="mt-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-fg">{entry.kind === 'space' ? `Blank space ${i + 1}` : `Description ${i + 1}`}</span>
                       <div className="flex items-center gap-1">
@@ -322,7 +335,8 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                       </select>
                       {error(pKey)}
                     </label>
-                  </div>
+                    </div>
+                  </details>
                 );
               })}
             </div>
@@ -330,13 +344,14 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
             <div className="mt-2.5 flex flex-wrap gap-2"><button type="button" className="btn btn-secondary" onClick={addTextRow} disabled={textRows.length >= 50}><Plus size={15} aria-hidden="true" />Add description</button><button type="button" className="btn btn-secondary" onClick={addSpace} disabled={textRows.length >= 50}><Plus size={15} aria-hidden="true" />Add space</button></div>
           </fieldset>
           <section className="sm:col-span-2 space-y-2" aria-label="Invoice row arrangement">
-            <div><h4 className="text-sm font-semibold text-fg">Invoice row order</h4><p className="text-xs text-fg-muted">Move products with their description rows, or move individual descriptions and blank spaces. This is the same order used in Preview and Print.</p></div>
+            <div><h4 className="text-sm font-semibold text-fg">Invoice row order</h4><p className="text-xs text-fg-muted">Move products with their descriptions, reorder individual rows, or delete a row. Product deletion retains supporting rows. The order matches Preview and Print.</p></div>
             <ol className="space-y-1">
               {orderedLines.map((line, position) => <li key={`${line.kind}-${line.index}`} className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs">
                 <span className="w-6 shrink-0 text-fg-subtle">{position + 1}</span>
                 <span className="min-w-0 flex-1 truncate text-fg">{line.kind === 'product' ? 'Product: ' + (line.value.product_service || 'Choose product') : line.kind === 'space' ? 'Blank row' : 'Description: ' + (line.value.text || 'Enter text')}</span>
                 <button type="button" className="btn btn-secondary btn-icon !h-7 !w-7" aria-label={`Move row ${position + 1} up`} title="Move up" disabled={position === 0 || (line.kind === 'product' && line.index === 0)} onClick={() => reorderLine(line, -1)}><ArrowUp size={14}/></button>
                 <button type="button" className="btn btn-secondary btn-icon !h-7 !w-7" aria-label={`Move row ${position + 1} down`} title="Move down" disabled={position === orderedLines.length - 1 || (line.kind === 'product' && line.index === items.length - 1)} onClick={() => reorderLine(line, 1)}><ArrowDown size={14}/></button>
+                <button type="button" className="btn btn-secondary btn-icon !h-7 !w-7 text-danger-ink" aria-label={`Delete row ${position + 1}`} title={line.kind === 'product' ? 'Delete product (supporting lines are retained)' : 'Delete row'} disabled={line.kind === 'product' && items.length <= 1} onClick={() => deleteLine(line)}><Trash2 size={14}/></button>
               </li>)}
             </ol>
           </section>

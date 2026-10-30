@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { orderedInvoiceLines, insertSupportingLine, appendProduct, moveProductGroup, moveSupportingLine, removeProduct, blankSpace } from '../../client/src/utils/invoiceLines.js';
+import { orderedInvoiceLines, insertSupportingLine, appendProduct, moveProductGroup, moveSupportingLine, removeProduct, deleteInvoiceLine, blankSpace } from '../../client/src/utils/invoiceLines.js';
 import { sheetPricing } from '../../client/src/utils/sheetPricing.js';
 import { validateInvoice } from '../services/validate.js';
 import { initSchema } from '../database/db.js';
@@ -42,6 +42,23 @@ describe('invoice visual ordering, product groups and blank spaces', () => {
     expect(result.errors).toEqual({});
     expect(result.value.text_rows).toEqual([{ text: '', kind: 'space', after_item: 1 }]);
     expect(result.value.amount_centavos).toBe(0);
+  });
+  it('deletes the exact description or spacer row and leaves product totals untouched', () => {
+    const withSpacer = insertSupportingLine(products, descriptions, 1, blankSpace());
+    const all = orderedInvoiceLines(withSpacer.items, withSpacer.text_rows);
+    const spacer = all.find(line => line.kind === 'space');
+    const deleted = deleteInvoiceLine(withSpacer.items, withSpacer.text_rows, spacer);
+    expect(deleted.text_rows).toHaveLength(descriptions.length);
+    expect(deleted.text_rows.map(row => row.text)).toEqual(descriptions.map(row => row.text));
+    const priced = deleteInvoiceLine(products, descriptions, { kind: 'description', index: 0 });
+    expect(sheetPricing(priced).total).toBe(500000);
+  });
+  it('deletes a product but keeps supporting descriptions and the last product', () => {
+    const changed = deleteInvoiceLine(products, descriptions, { kind: 'product', index: 0 });
+    expect(changed.items).toHaveLength(1);
+    expect(changed.text_rows).toHaveLength(3);
+    expect(changed.text_rows.every(row => row.after_item === 1)).toBe(true);
+    expect(deleteInvoiceLine(changed.items, changed.text_rows, { kind: 'product', index: 0 })).toBeNull();
   });
   it('reassigns child descriptions when removing a product', () => {
     const next = removeProduct(products, descriptions, 0);
