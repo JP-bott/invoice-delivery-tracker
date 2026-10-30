@@ -46,7 +46,7 @@ export function InvoiceSheet({ invoice, type, whtRate, vatExclusiveItems = false
       </tbody></table>
       <table className="items">
         <thead><tr><th className="qty">QTY.</th><th>{isSalesInvoice ? 'NATURE OF GOODS' : 'NATURE OF SERVICE'}</th>{!simplified && <th className="unit">UNIT<br />COST</th>}<th className="amt">{vatExclusiveItems && vatable ? <>AMOUNT<br />(EXCL. VAT)</> : 'AMOUNT'}</th></tr></thead>
-        <tbody>{rows.map((r, i) => <tr key={i}><td className="qty">{r.q}</td><td className={`d ${r.sub ? 'sub' : ''} ${r.note ? 'note-row' : ''} ${r.title ? 'title-row' : ''}`}>{r.d}</td>{!simplified && <td className="unit">{r.u}</td>}<td className="amt">{r.a}</td></tr>)}</tbody>
+        <tbody>{rows.map((r, i) => <tr key={i}><td className="qty">{r.q}</td><td className={`d ${r.sub ? 'sub' : ''} ${r.note ? 'note-row' : ''}`}>{r.d}</td>{!simplified && <td className="unit">{r.u}</td>}<td className="amt">{r.a}</td></tr>)}</tbody>
       </table>
       <table className="totals"><tbody>
         <tr><td className="c1" /><td className="c2" /><td className="c3 lbl">Total Sales (Vat Inclusive)</td><td className="c4 val">{show(t.total)}</td></tr>
