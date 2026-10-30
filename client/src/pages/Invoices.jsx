@@ -28,7 +28,7 @@ const splitInvoiceNumber = (invoiceNo = '') => ({ invoice_prefix: splitInvoiceNo
 // Items for editing: saved unit costs as they are; invoices saved before unit costs existed get one only when it is exact.
 const editItems = (r) => {
   const list = Array.isArray(r.items) && r.items.length ? r.items : [{ product_service: r.product_service, quantity: 1, unit_cost: r.amount }];
-  return list.map((it) => ({ product_service: it.product_service, description: it.description ?? '', quantity: String(it.quantity || 1), unit_cost: it.unit_cost != null ? formatAmount(it.unit_cost) : list.length === 1 ? formatAmount(deriveUnitCost(r.amount, it.quantity)) : '' }));
+  return list.map((it) => ({ product_service: it.product_service, quantity: String(it.quantity || 1), unit_cost: it.unit_cost != null ? formatAmount(it.unit_cost) : list.length === 1 ? formatAmount(deriveUnitCost(r.amount, it.quantity)) : '' }));
 };
 
 export default function Invoices() {
