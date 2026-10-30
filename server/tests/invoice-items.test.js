@@ -28,12 +28,10 @@ describe('item validation', () => {
     expect(r.value.amount_centavos).toBe(50000);
     expect(r.value.product_service).toBe('Cement, IT Services');
   });
-  it('validates an optional per-item product description', () => {
-    const result = v({ items: [{ ...two[0], description: '  Type 1 cement  ' }, { ...two[1], description: ' ' }] });
+  it('ignores the retired product description input', () => {
+    const result = v({ items: [{ ...two[0], description: 'Old field text' }, two[1]] });
     expect(result.errors).toEqual({});
-    expect(result.value.items[0].description).toBe('Type 1 cement');
-    expect(result.value.items[1].description).toBeUndefined();
-    expect(v({ items: [{ ...two[0], description: 'x'.repeat(501) }] }).errors.items_0_description).toMatch(/500/);
+    expect(result.value.items[0].description).toBeUndefined();
   });
   it('treats a lone product_service as one item with quantity 1', () => {
     expect(v({ product_service: 'P' }).value.items).toEqual([{ product_service: 'P', quantity: 1, unit_cost_centavos: 50000, amount_centavos: 50000 }]);
@@ -61,23 +59,22 @@ describe('invoice items API', () => {
     expect(upd.body.product_service).toBe('Rice 50kg');
     expect((await GET(`/api/invoices/${created.body.id}`)).body.items).toHaveLength(1);
   });
-  it('persists product descriptions across add, fetch, edit, and export without changing totals', async () => {
-    const created = await POST('/api/invoices', inv({ items: [{ ...two[0], description: ' Type 1 cement ' }, { ...two[1], description: 'Installation and configuration' }] }));
+  it('keeps legacy descriptions when editing unchanged products without enabling new descriptions', async () => {
+    const created = await POST('/api/invoices', inv({ items: two }));
     expect(created.status).toBe(201);
-    expect(created.body.amount).toBe(500);
-    expect(created.body.items.map(x => x.description)).toEqual(['Type 1 cement', 'Installation and configuration']);
     const id = created.body.id;
-    expect((await GET(`/api/invoices/${id}`)).body.items[0].description).toBe('Type 1 cement');
-    expect((await GET('/api/invoices?pageSize=100')).body.data.find(x => x.id === id).items[1].description).toBe('Installation and configuration');
-    expect((await GET('/api/invoices/export-data')).body.data.find(x => x.id === id).items[0].description).toBe('Type 1 cement');
-    const updated = await PUT(`/api/invoices/${id}`, inv({ items: [{ ...two[0], description: 'Updated specification' }, { ...two[1], description: '' }] }));
-    expect(updated.status).toBe(200);
-    expect(updated.body.amount).toBe(500);
-    expect(updated.body.items[0].description).toBe('Updated specification');
-    expect(updated.body.items[1].description).toBeUndefined();
     const db = createClient({ url: 'file:' + dbFile });
-    expect((await db.execute({ sql: 'SELECT description FROM invoice_items WHERE invoice_id = ? ORDER BY position', args: [id] })).rows.map(x => x.description)).toEqual(['Updated specification', '']);
-    await DEL(`/api/invoices/${id}`);
+    await db.execute({ sql: 'UPDATE invoice_items SET description = ? WHERE invoice_id = ? AND position = 0', args: ['Historical details', id] });
+    expect((await GET('/api/invoices/' + id)).body.items[0].description).toBe('Historical details');
+    const edited = await PUT('/api/invoices/' + id, inv({ items: [{ ...two[0], description: 'Not accepted' }, two[1]] }));
+    expect(edited.status).toBe(200);
+    expect(edited.body.items[0].description).toBe('Historical details');
+    expect((await db.execute({ sql: 'SELECT description FROM invoice_items WHERE invoice_id = ? AND position = 0', args: [id] })).rows[0].description).toBe('Historical details');
+    const changed = await PUT('/api/invoices/' + id, inv({ items: [{ ...two[0], product_service: 'Other' }, two[1]] }));
+    expect(changed.status).toBe(200);
+    expect(changed.body.items[0].description).toBeUndefined();
+    await DEL('/api/invoices/' + id);
+    db.close();
   });
   it('returns items in the list and the product filter still matches any item', async () => {
     const c = await POST('/api/invoices', inv({ items: [{ product_service: 'Zebra Crossing Paint', unit_cost: '50', quantity: 4 }, { product_service: 'Brushes', unit_cost: '37.50', quantity: 8 }] }));
