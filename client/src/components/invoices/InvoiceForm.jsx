@@ -6,6 +6,7 @@ import { valueOf } from '../../utils/customFields.js';
 import { MAX_ITEMS, blankItem, sanitizeDecimal } from '../../utils/items.js';
 import { priceInvoice } from '../../../../shared/pricing.js';
 import { sheetPricing } from '../../utils/sheetPricing.js';
+import { orderedInvoiceLines, appendProduct, insertSupportingLine, moveProductGroup, moveSupportingLine, removeProduct, blankSpace, blankDescription } from '../../utils/invoiceLines.js';
 import { dueDateFromDelivery } from '../../../../shared/dueDate.js';
 import { api } from '../../utils/api.js';
 import { splitInvoiceNo } from '../../utils/invoiceNo.js';
@@ -100,26 +101,28 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
   const textRows = Array.isArray(form.text_rows) ? form.text_rows : [];
   const setItems = (next) => setForm({ ...form, items: next });
   const setItem = (i, patch) => setItems(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
-  const addItem = () => {
-    const at = items.length;
-    setForm({ ...form, items: [...items, blankItem()], text_rows: textRows.map((r) => ({ ...r, after_item: r.after_item === at ? at + 1 : r.after_item })) });
-    requestAnimationFrame(() => document.getElementById(`invoice-item-${at}-product`)?.focus());
+  const addItem = () => setForm({ ...form, ...appendProduct(items, textRows, blankItem()) });
+  const removeItem = (i) => setForm({ ...form, ...removeProduct(items, textRows, i) });
+  const setTextRow = (i, patch) => setForm({ ...form, text_rows: textRows.map((row, index) => index === i ? { ...row, ...patch } : row) });
+  const addLine = (line) => {
+    const order = orderedInvoiceLines(items, textRows);
+    const newForm = insertSupportingLine(items, textRows, order.length - 1, line);
+    setForm({ ...form, ...newForm });
   };
-  const removeItem = (i) => setForm({ ...form, items: items.filter((_, j) => j !== i), text_rows: textRows.map((r) => ({ ...r, after_item: r.after_item > i ? r.after_item - 1 : r.after_item })) });
-  const setTextRow = (i, patch) => setForm({ ...form, text_rows: textRows.map((r, j) => (i === j ? { ...r, ...patch } : r)) });
-  const addTextRow = () => {
-    const at = textRows.length;
-    setForm({ ...form, text_rows: [...textRows, { text: '', after_item: items.length, is_priced: false, quantity: '1', unit_cost: '' }] });
-    requestAnimationFrame(() => document.getElementById(`invoice-text-row-${at}`)?.focus());
+  const addTextRow = () => addLine(blankDescription());
+  const addSpace = () => addLine(blankSpace());
+  const removeTextRow = (i) => setForm({ ...form, text_rows: textRows.filter((_, index) => index !== i) });
+  const reorderLine = (line, direction) => {
+    const changed = line.kind === 'product'
+      ? moveProductGroup(items, textRows, line.index, direction)
+      : moveSupportingLine(items, textRows, line.index, direction);
+    if (changed) setForm({ ...form, ...changed });
   };
-  const removeTextRow = (i) => setForm({ ...form, text_rows: textRows.filter((_, j) => i !== j) });
   const moveTextRow = (i, direction) => {
-    const dest = i + direction;
-    if (dest < 0 || dest >= textRows.length) return;
-    const next = [...textRows];
-    [next[i], next[dest]] = [next[dest], next[i]];
-    setForm({ ...form, text_rows: next });
+    const next = moveSupportingLine(items, textRows, i, direction);
+    if (next) setForm({ ...form, ...next });
   };
+  const orderedLines = orderedInvoiceLines(items, textRows);
   const priced = priceInvoice(items, textRows);
   const total = priced.subtotal ?? 0; // invoice amount = sum of line amounts (VAT-inclusive, as before)
   const calculatedDueDate = dueDateFromDelivery(form.delivery_date) || '';
@@ -292,14 +295,14 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                 return (
                   <div key={i} className="rounded-xl border border-line bg-surface-2 p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-fg">Text row {i + 1}</span>
+                      <span className="text-xs font-semibold text-fg">{entry.kind === 'space' ? `Blank space ${i + 1}` : `Description ${i + 1}`}</span>
                       <div className="flex items-center gap-1">
                         <button type="button" className="btn btn-secondary btn-icon !h-8 !w-8" disabled={i === 0} onClick={() => moveTextRow(i, -1)} aria-label={`Move text row ${i + 1} up`} title="Move up in text row order"><ArrowUp size={15} aria-hidden="true" /></button>
                         <button type="button" className="btn btn-secondary btn-icon !h-8 !w-8" disabled={i === textRows.length - 1} onClick={() => moveTextRow(i, 1)} aria-label={`Move text row ${i + 1} down`} title="Move down in text row order"><ArrowDown size={15} aria-hidden="true" /></button>
                         <button type="button" className="btn btn-secondary btn-icon !h-8 !w-8" onClick={() => removeTextRow(i)} aria-label={`Remove text row ${i + 1}`} title="Remove text row"><Trash2 size={15} aria-hidden="true" /></button>
                       </div>
                     </div>
-                    <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" checked={Boolean(entry.is_priced)} onChange={(e) => setTextRow(i, { is_priced: e.target.checked })} /> Priced</label>
+                    {entry.kind !== 'space' && <><label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" checked={Boolean(entry.is_priced)} onChange={(e) => setTextRow(i, { is_priced: e.target.checked })} /> Priced</label>
                     <label className="label block" htmlFor={`invoice-text-row-${i}`}>
                       <span className="mb-1 block text-xs">Nature of service text</span>
                       <textarea id={`invoice-text-row-${i}`} rows={2} maxLength={2000} required placeholder="Enter text exactly as it should appear in its own invoice row" className={cls(tKey) + ' min-h-16 resize-y whitespace-pre-wrap'} value={entry.text} onChange={(e) => setTextRow(i, { text: e.target.value })} {...aria(tKey)} />
@@ -310,6 +313,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
                       <label className="label">Unit Price (₱)<input id={`invoice-text-price-${i}`} className="input" inputMode="decimal" value={entry.unit_cost ?? ''} onChange={(e) => setTextRow(i, { unit_cost: sanitizeDecimal(e.target.value, 2) })} />{error(`text_rows_${i}_unit_cost`)}</label>
                       <div className="label">Amount (₱)<output className="input flex items-center justify-end">{line?.amount == null ? '—' : money(line.amount)}</output></div>
                     </div>}
+                    </>}
                     <label className="label block" htmlFor={`invoice-text-position-${i}`}>
                       <span className="mb-1 block text-xs">Place this row</span>
                       <select id={`invoice-text-position-${i}`} className={cls(pKey)} value={entry.after_item} onChange={(e) => setTextRow(i, { after_item: Number(e.target.value) })} {...aria(pKey)}>
@@ -323,8 +327,19 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
               })}
             </div>
             {error('text_rows')}
-            <button type="button" className="btn btn-secondary mt-2.5" onClick={addTextRow} disabled={textRows.length >= 50}><Plus size={15} aria-hidden="true" />Add description-only row</button>
+            <div className="mt-2.5 flex flex-wrap gap-2"><button type="button" className="btn btn-secondary" onClick={addTextRow} disabled={textRows.length >= 50}><Plus size={15} aria-hidden="true" />Add description</button><button type="button" className="btn btn-secondary" onClick={addSpace} disabled={textRows.length >= 50}><Plus size={15} aria-hidden="true" />Add space</button></div>
           </fieldset>
+          <section className="sm:col-span-2 space-y-2" aria-label="Invoice row arrangement">
+            <div><h4 className="text-sm font-semibold text-fg">Invoice row order</h4><p className="text-xs text-fg-muted">Move products with their description rows, or move individual descriptions and blank spaces. This is the same order used in Preview and Print.</p></div>
+            <ol className="space-y-1">
+              {orderedLines.map((line, position) => <li key={`${line.kind}-${line.index}`} className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs">
+                <span className="w-6 shrink-0 text-fg-subtle">{position + 1}</span>
+                <span className="min-w-0 flex-1 truncate text-fg">{line.kind === 'product' ? 'Product: ' + (line.value.product_service || 'Choose product') : line.kind === 'space' ? 'Blank row' : 'Description: ' + (line.value.text || 'Enter text')}</span>
+                <button type="button" className="btn btn-secondary btn-icon !h-7 !w-7" aria-label={`Move row ${position + 1} up`} title="Move up" disabled={position === 0 || (line.kind === 'product' && line.index === 0)} onClick={() => reorderLine(line, -1)}><ArrowUp size={14}/></button>
+                <button type="button" className="btn btn-secondary btn-icon !h-7 !w-7" aria-label={`Move row ${position + 1} down`} title="Move down" disabled={position === orderedLines.length - 1 || (line.kind === 'product' && line.index === items.length - 1)} onClick={() => reorderLine(line, 1)}><ArrowDown size={14}/></button>
+              </li>)}
+            </ol>
+          </section>
         </Group>
         </div>
         <div className={step === 3 ? "" : "hidden"}><Group id="payment-heading" title="Payment" description="Amount billed, received and current payment state.">
