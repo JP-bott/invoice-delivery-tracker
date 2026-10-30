@@ -91,6 +91,8 @@ export const TEXT_PRICING_COLUMNS = [
   'amount_centavos INTEGER',
 ];
 
+export const TEXT_ROW_KIND_COLUMN = "kind TEXT NOT NULL DEFAULT 'description' CHECK (kind IN ('description','space'))";
+
 // Registered clients (Settings > Clients) that the Add Invoice form can suggest. migrations/005_clients.sql mirrors this and
 // INVOICE_CLIENT_COLUMNS; a test keeps them in sync. An invoice never points at a client row: it keeps its own copy of the
 // name, TIN and address (the snapshot taken when it was saved), so renaming or deleting a client never rewrites issued invoices.
