@@ -39,19 +39,17 @@ export function insertSupportingLine(items, textRows, afterVisualIndex, row) {
 
 export function removeProduct(items, textRows, productIndex) {
   if (items.length <= 1) return { items, text_rows: textRows };
-  // Reattach any descriptions/spaces beneath the removed product to its
-  // predecessor. For the first product, preserve children under the next one.
-  const lines = orderedInvoiceLines(items, textRows);
-  const start = lines.findIndex(line => line.kind === 'product' && line.index === productIndex);
-  lines.splice(start, 1);
-  if (productIndex === 0) {
-    const nextProduct = lines.findIndex(line => line.kind === 'product');
-    if (nextProduct >= 0) {
-      const extras = lines.splice(start, nextProduct - start);
-      lines.splice(1, 0, ...extras);
-    }
-  }
-  return serializeInvoiceLines(lines);
+  const remaining = items.filter((_, index) => index !== productIndex);
+  const removedPosition = productIndex + 1;
+  return {
+    items: remaining,
+    text_rows: textRows.map(row => {
+      const at = Number(row.after_item);
+      if (at > removedPosition) return { ...row, after_item: at - 1 };
+      if (at === removedPosition) return { ...row, after_item: Math.max(1, productIndex) };
+      return row;
+    }),
+  };
 }
 
 // Move a product together with all rows attached beneath it. This guarantees
