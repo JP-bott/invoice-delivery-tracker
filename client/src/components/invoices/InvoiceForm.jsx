@@ -5,6 +5,7 @@ import { formatAmount } from '../../utils/money.js';
 import { valueOf } from '../../utils/customFields.js';
 import { MAX_ITEMS, blankItem, sanitizeDecimal } from '../../utils/items.js';
 import { priceInvoice } from '../../../../shared/pricing.js';
+import { sheetPricing } from '../../utils/sheetPricing.js';
 import { dueDateFromDelivery } from '../../../../shared/dueDate.js';
 import { api } from '../../utils/api.js';
 import { splitInvoiceNo } from '../../utils/invoiceNo.js';
@@ -351,7 +352,7 @@ export default function InvoiceForm({ form, setForm, errs, onSave, onCancel, pro
         </label></div>
         {step === 5 && <section aria-label="Review invoice" className="space-y-4">
           <div className="rounded-xl border border-line bg-surface-2 p-4"><div className="flex justify-between gap-2"><strong>Invoice & client</strong><button type="button" className="text-xs underline" onClick={() => navigateStep(0)}>Edit</button></div><p className="mt-2 text-sm">{shownNo || 'Number assigned on save'} · {form.date_issued}</p><p className="text-sm">{form.client_name} · Delivery: {form.delivery_date || 'Not set'}</p></div>
-          <div className="rounded-xl border border-line p-4"><div className="flex justify-between gap-2"><strong>Products & services</strong><button type="button" className="text-xs underline" onClick={() => navigateStep(2)}>Edit</button></div>{items.map((item, i) => <div key={i} className="mt-2 flex justify-between gap-2 text-sm"><span>{item.product_service} × {item.quantity}</span><span>₱{priced.lines[i]?.amount == null ? '—' : money(priced.lines[i].amount)}</span></div>)}<p className="mt-2 text-xs text-fg-muted">{textRows.length} supporting description-only row(s)</p><div className="mt-3 flex justify-between border-t border-line pt-3 font-semibold"><span>Invoice total</span><span>₱{money(total)}</span></div></div>
+          <div className="rounded-xl border border-line p-4"><div className="flex justify-between gap-2"><strong>Products & services</strong><button type="button" className="text-xs underline" onClick={() => navigateStep(2)}>Edit</button></div>{sheetPricing({ ...form, items, text_rows: textRows }).rows.map((line, i) => <div key={i} className="mt-2 flex justify-between gap-2 text-sm"><span className={line.title ? 'font-semibold' : line.spec ? 'pl-3' : ''}>{line.title ? line.d : `${line.q ? line.q + ' × ' : ''}${line.d}`}</span><span>{line.a ? '₱' + line.a : ''}</span></div>)}<div className="mt-3 flex justify-between border-t border-line pt-3 font-semibold"><span>Invoice total</span><span>₱{money(total)}</span></div></div>
           <div className="rounded-xl border border-line bg-surface-2 p-4"><div className="flex justify-between gap-2"><strong>Payment & additional information</strong><button type="button" className="text-xs underline" onClick={() => navigateStep(3)}>Edit</button></div><p className="mt-2 text-sm">{form.payment_status} · Paid ₱{formatAmount(form.amount_paid || '0')}</p>{form.remarks && <p className="mt-2 whitespace-pre-wrap text-sm">{form.remarks}</p>}{fields.length > 0 && <button type="button" className="mt-2 text-xs underline" onClick={() => navigateStep(4)}>Edit custom fields</button>}</div>
           <p className="text-xs text-fg-muted">Use Preview to inspect the invoice before saving.</p>
         </section>}
