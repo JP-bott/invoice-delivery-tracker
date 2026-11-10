@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu, Moon, Plus, Search, Sun, X } from 'lucide-react';
+import { LogOut, Menu, Moon, Plus, Search, Sun, X } from 'lucide-react';
+import { useAuth } from '../../auth/AuthContext.jsx';
 import { today } from '../../utils/dates.js';
 
 const TITLES = { '/': 'Dashboard', '/invoices': 'Invoices', '/document-converter': 'Document Converter', '/background-remover': 'Background Remover', '/settings': 'Settings' };
@@ -17,6 +18,7 @@ const isTyping = (el) => Boolean(el) && (el.isContentEditable || ['INPUT', 'TEXT
 // Add Invoice is the only filled control; everything else stays quiet so the eye lands on the page title first.
 export default function Topbar({ theme, onToggleTheme, onOpenMenu }) {
   const { pathname } = useLocation();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [focused, setFocused] = useState(false);
@@ -77,6 +79,8 @@ export default function Topbar({ theme, onToggleTheme, onOpenMenu }) {
         <button type="button" className="btn btn-ghost btn-icon" onClick={onToggleTheme} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
           {theme === 'dark' ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
         </button>
+        <span className="hidden max-w-36 truncate text-xs text-fg-muted xl:block" title={user?.email}>{user?.name}</span>
+        <button type="button" onClick={logout} className="btn btn-ghost btn-icon" title="Sign out" aria-label="Sign out"><LogOut size={18} aria-hidden="true" /></button>
         <button type="button" className="btn btn-primary max-sm:btn-icon" onClick={() => navigate('/invoices?new=1')} aria-label="Add invoice"><Plus size={16} aria-hidden="true" /><span className="hidden sm:inline">Add Invoice</span></button>
       </div>
     </header>
