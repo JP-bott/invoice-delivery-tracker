@@ -44,8 +44,8 @@ export function AuthProvider({ children }) {
   const resend = useCallback((email) => request('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) }), []);
   const verify = useCallback((token) => request('/api/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) }), []);
   const logout = useCallback(async () => {
-    try { await request('/api/auth/logout', { method: 'POST', body: '{}' }); }
-    finally { setUser(null); }
+    await request('/api/auth/logout', { method: 'POST', body: '{}' });
+    setUser(null);
   }, []);
 
   const value = useMemo(() => ({ user, loading, signin, signup, resend, verify, logout, refresh }), [user, loading, signin, signup, resend, verify, logout, refresh]);
