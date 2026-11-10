@@ -9,7 +9,8 @@
   <script>
     // Apply the saved/system theme before first paint to avoid a flash of the wrong theme.
     try {
-      var t = localStorage.getItem('theme');
+      var consent = sessionStorage.getItem('invoice-tracker:storage-consent:v1');
+      var t = consent === 'preferences' ? localStorage.getItem('theme') : null;
       var dark = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
       document.documentElement.classList.toggle('dark', dark);
     } catch (e) {}
