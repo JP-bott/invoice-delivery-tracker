@@ -1,27 +1,104 @@
-// Adapts a Node (req, res) pair to handle(). Used by api/index.js (Vercel) and the Vite dev server.
+// Adapts a Node (req, res) pair to the shared API handler.
+// Every production /api request passes through authentication here.
 import { handle } from './handler.js';
-import { fail } from './http.js';
+import { fail, errorResponse } from './http.js';
+import { ensureSchema } from './database/db.js';
+import {
+  signup, signin, verifyEmail, resendVerification, sessionUser, logout,
+  sessionCookie, clearSessionCookie,
+} from './services/authService.js';
 
 async function readBody(req) {
   let raw = req.body;
-  if (raw === undefined) { // not pre-parsed (Vite dev server)
+  if (raw === undefined) {
     const chunks = [];
-    for await (const c of req) chunks.push(c);
+    let total = 0;
+    for await (const c of req) {
+      total += c.length;
+      if (total > 16000) throw Object.assign(new Error('Request too large'), { status: 413 });
+      chunks.push(c);
+    }
     raw = Buffer.concat(chunks).toString('utf8');
   }
   if (typeof raw !== 'string') return raw;
   return raw.trim() ? JSON.parse(raw) : undefined;
 }
 
+const authRoutes = new Set(['/api/auth/signup', '/api/auth/signin', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/logout', '/api/auth/me']);
+const businessRoutes = new Set(['products', 'clients', 'invoice-fields', 'dashboard-filters', 'timeline-stages', 'invoices', 'dashboard', 'filters']);
+const isMutation = (method) => !['GET', 'HEAD', 'OPTIONS'].includes(method);
+const toObject = (headers = {}) => Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
+
+function sameOrigin(req, headers) {
+  const origin = headers.origin;
+  if (!origin) return true;
+  try {
+    const expected = new URL(process.env.APP_BASE_URL || `http://${headers.host || 'localhost'}`);
+    const supplied = new URL(origin);
+    const forwarded = (headers['x-forwarded-host'] || headers.host || '').split(',')[0].trim();
+    // Public deployments require the explicitly configured origin, not a spoofed Host.
+    if (process.env.VERCEL && !process.env.APP_BASE_URL) return false;
+    return supplied.origin === expected.origin && (!process.env.VERCEL || supplied.host === forwarded);
+  } catch { return false; }
+}
+
+function isSecure(req, headers) {
+  return Boolean(process.env.VERCEL) || headers['x-forwarded-proto'] === 'https' || Boolean(req.socket?.encrypted);
+}
+
+async function authenticatedRoute(path, method, body, headers, ip, secure) {
+  const user = await sessionUser(headers);
+  if (path === '/api/auth/me' && method === 'GET') {
+    return user ? { status: 200, body: { user } } : fail(401, 'AUTH_REQUIRED', 'Sign in to continue');
+  }
+  if (path === '/api/auth/logout' && method === 'POST') {
+    await logout(headers);
+    return { status: 200, body: { message: 'Signed out' }, cookie: clearSessionCookie(secure) };
+  }
+  if (path === '/api/auth/signup' && method === 'POST') return { status: 200, body: await signup(body, ip) };
+  if (path === '/api/auth/resend-verification' && method === 'POST') return { status: 200, body: await resendVerification(body, ip) };
+  if (path === '/api/auth/verify-email' && method === 'POST') return { status: 200, body: await verifyEmail(body?.token) };
+  if (path === '/api/auth/signin' && method === 'POST') {
+    const result = await signin(body, ip);
+    return { status: 200, body: { user: result.user }, cookie: sessionCookie(result.token, secure) };
+  }
+  return fail(404, 'NOT_FOUND', 'Unknown endpoint');
+}
+
 export async function nodeHandler(req, res) {
   let r;
+  const headers = toObject(req.headers);
+  const secure = isSecure(req, headers);
   try {
     const url = new URL(req.url, 'http://localhost');
+    const method = String(req.method || 'GET').toUpperCase();
     let body;
-    try { body = await readBody(req); } catch { body = null; r = fail(400, 'BAD_REQUEST', 'Malformed JSON body'); }
-    r ||= await handle({ method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body });
-  } catch (e) { console.error(e); r = fail(500, 'SERVER_ERROR', 'Internal error'); }
+    try { body = await readBody(req); } catch {
+      r = fail(400, 'BAD_REQUEST', 'Malformed or oversized JSON body');
+    }
+    if (!r && isMutation(method) && !sameOrigin(req, headers)) {
+      r = fail(403, 'INVALID_ORIGIN', 'Request origin is not allowed');
+    }
+    const ip = String(headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].slice(0, 64);
+    if (!r && authRoutes.has(url.pathname)) {
+      await ensureSchema();
+      r = await authenticatedRoute(url.pathname, method, body, headers, ip, secure);
+    }
+    if (!r && url.pathname.startsWith('/api/') && businessRoutes.has(url.pathname.split('/')[2])) {
+      await ensureSchema();
+      const user = await sessionUser(headers);
+      r = user
+        ? await handle({ method, path: url.pathname, query: Object.fromEntries(url.searchParams), body })
+        : fail(401, 'AUTH_REQUIRED', 'Sign in to continue');
+    }
+    if (!r) r = await handle({ method, path: url.pathname, query: Object.fromEntries(url.searchParams), body });
+  } catch (e) {
+    r = errorResponse(e);
+  }
   res.statusCode = r.status;
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (r.cookie) res.setHeader('Set-Cookie', r.cookie);
   if (r.body === undefined) return res.end();
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(r.body));
