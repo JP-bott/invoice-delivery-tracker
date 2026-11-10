@@ -9,6 +9,7 @@ import InvoiceFieldsSection from '../components/settings/InvoiceFieldsSection.js
 import PaymentTimelineSettings from '../components/settings/PaymentTimelineSettings.jsx';
 import DashboardFiltersSection from '../components/settings/DashboardFiltersSection.jsx';
 import { PageHeader } from '../components/ui.jsx';
+import { PrivacySettingsButton } from '../components/CookieConsent.jsx';
 
 // A single focused section at a time. The overview does not mount any data-editing panels
 // or make their API requests until the user opens that section.
@@ -50,6 +51,7 @@ export default function Settings() {
           title="Settings"
           description="Choose what you would like to manage. Each area opens separately so you can focus on one thing at a time."
         />
+        <div className="rounded-2xl border border-line bg-surface px-4 py-4 sm:px-5"><h2 className="text-sm font-semibold text-fg">Privacy and browser storage</h2><p className="my-2 text-sm text-fg-muted">Review or change optional browser preference storage at any time. A new session will ask again.</p><PrivacySettingsButton /></div>
         <nav aria-label="Settings sections">
           <div className="mb-3 flex items-center gap-2 px-1">
             <Settings2 size={16} className="text-fg-subtle" aria-hidden="true" />
