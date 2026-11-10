@@ -9,6 +9,7 @@ import {
 } from './services/authService.js';
 
 async function readBody(req) {
+  if (['GET', 'HEAD'].includes(String(req.method).toUpperCase())) return undefined;
   let raw = req.body;
   if (raw === undefined) {
     const chunks = [];
