@@ -42,10 +42,10 @@ export default function CookieConsent() {
               {choice !== null && <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost btn-icon" aria-label="Close privacy settings"><X size={17} /></button>}
             </div>
             <p className="mt-2 text-sm leading-relaxed text-fg-muted">
-              We use essential browser functions to operate the invoice tracker. With your permission, we also save your appearance and layout choices on this device for future visits. Optional preferences are off unless you accept.
+              We use an essential, secure sign-in cookie to keep your company account signed in. With your permission, we also save your appearance and layout choices on this device for future visits. Optional preferences are off unless you accept.
             </p>
             <div className="mt-3 space-y-2 rounded-xl bg-surface-2 p-3 text-xs leading-relaxed text-fg-muted">
-              <p><strong className="text-fg">Essential functions:</strong> Invoice and dashboard requests work without optional storage. Your choice is kept in this tab for this session.</p>
+              <p><strong className="text-fg">Essential functions:</strong> Your sign-in session uses an HttpOnly authentication cookie. Your privacy choice is kept in this tab for this session.</p>
               <p><strong className="text-fg">Optional preferences:</strong> Theme, sidebar layout, and dashboard amount visibility can be saved in local browser storage. No advertising or third-party analytics cookies are added by this feature.</p>
               <p><strong className="text-fg">Each session:</strong> You will be asked again in a new browser-tab session. Refreshing this tab does not ask again. You can change your choice using Privacy settings.</p>
             </div>

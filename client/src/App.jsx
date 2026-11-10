@@ -8,9 +8,10 @@ import BackgroundRemover from './pages/BackgroundRemover.jsx';
 import Sidebar from './components/layout/Sidebar.jsx';
 import Topbar from './components/layout/Topbar.jsx';
 import CookieConsent from './components/CookieConsent.jsx';
+import AuthGate from './auth/AuthGate.jsx';
 import { useStoredBool, useTheme } from './utils/theme.js';
 
-export default function App() {
+function Workspace() {
   const { theme, toggle } = useTheme();
   const [collapsed, setCollapsed] = useStoredBool('sidebar-collapsed', false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -44,7 +45,10 @@ export default function App() {
           </div>
         </main>
       </div>
-      <CookieConsent />
     </div>
   );
+}
+
+export default function App() {
+  return <><AuthGate><Workspace /></AuthGate><CookieConsent /></>;
 }
