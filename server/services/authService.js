@@ -95,6 +95,7 @@ async function sendVerification(email, token) {
       body: JSON.stringify({
         from: sender, to: [email], subject: 'Verify your Invoice Tracker account',
         text: `Confirm your company email by opening this link:\n\n${url}\n\nThis link expires in 24 hours. If you did not create an account, ignore this message.`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:540px;margin:auto;padding:28px;color:#202020"><h2>Verify your company email</h2><p>Confirm your email to activate your Invoice Tracker account.</p><p><a href="${url}" style="display:inline-block;background:#252422;color:white;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">Verify email</a></p><p style="font-size:13px;color:#666">This link expires in 24 hours. If you did not sign up, you can ignore this message.</p></div>`,
       }),
     });
   } catch { throw httpError(503, 'Unable to send verification email', 'EMAIL_UNAVAILABLE'); }
