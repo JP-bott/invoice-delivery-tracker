@@ -7,6 +7,7 @@ import DocumentConverter from './pages/DocumentConverter.jsx';
 import BackgroundRemover from './pages/BackgroundRemover.jsx';
 import Sidebar from './components/layout/Sidebar.jsx';
 import Topbar from './components/layout/Topbar.jsx';
+import CookieConsent from './components/CookieConsent.jsx';
 import { useStoredBool, useTheme } from './utils/theme.js';
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
           </div>
         </main>
       </div>
+      <CookieConsent />
     </div>
   );
 }
