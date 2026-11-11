@@ -49,6 +49,7 @@ describe('authenticated company workspace', () => {
     expect(emailMessage.to).toEqual(['person@example.com']);
     expect(emailMessage.html).toContain('Verify email');
     expect((await request('GET', '/api/invoices')).status).toBe(401);
+    expect((await request('GET', '/api/auth/me')).body).toEqual({ user: null });
     expect((await request('POST', '/api/auth/signin', { email: 'person@example.com', password })).status).toBe(403);
   });
 
@@ -69,6 +70,29 @@ describe('authenticated company workspace', () => {
     expect((await request('GET', '/api/invoices', undefined, cookie)).status).toBe(200);
     expect((await request('POST', '/api/auth/logout', {}, cookie)).status).toBe(200);
     expect((await request('GET', '/api/invoices', undefined, cookie)).status).toBe(401);
+  });
+
+  it('accepts legitimate Vercel production and preview origins even when APP_BASE_URL points elsewhere', async () => {
+    const originalVercel = process.env.VERCEL;
+    const previousBase = process.env.APP_BASE_URL;
+    process.env.VERCEL = '1';
+    process.env.APP_BASE_URL = 'https://production.example.com';
+    try {
+      for (const host of ['production.example.com', 'invoice-preview-123.vercel.app']) {
+        const req = {
+          method: 'POST', url: '/api/auth/signup',
+          headers: { host, 'x-forwarded-host': host, 'x-forwarded-proto': 'https', origin: `https://${host}`, 'sec-fetch-site': 'same-origin', 'x-forwarded-for': '203.0.113.80' },
+          body: { name: 'Test User', email: 'extra@example.com', password: '12345678' },
+        };
+        const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, end(b) { this.output = b; } };
+        await nodeHandler(req, res);
+        expect(res.statusCode).not.toBe(403);
+      }
+    } finally {
+      if (originalVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = originalVercel;
+      process.env.APP_BASE_URL = previousBase;
+    }
   });
 
   it('rejects cross-origin mutating requests', async () => {
