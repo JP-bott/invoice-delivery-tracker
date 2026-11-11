@@ -30,16 +30,22 @@ const businessRoutes = new Set(['products', 'clients', 'invoice-fields', 'dashbo
 const isMutation = (method) => !['GET', 'HEAD', 'OPTIONS'].includes(method);
 const toObject = (headers = {}) => Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
 
+// Compare to the origin of THIS request, not APP_BASE_URL (which is only for
+// verification links). Vercel preview URLs and production custom domains differ.
 function sameOrigin(req, headers) {
-  const origin = headers.origin;
-  if (!origin) return true;
+  if (headers['sec-fetch-site'] === 'cross-site') return false;
+  if (!headers.origin) return true; // Native clients may not send Origin.
   try {
-    const expected = new URL(process.env.APP_BASE_URL || `http://${headers.host || 'localhost'}`);
-    const supplied = new URL(origin);
-    const forwarded = (headers['x-forwarded-host'] || headers.host || '').split(',')[0].trim();
-    // Public deployments require the explicitly configured origin, not a spoofed Host.
-    if (process.env.VERCEL && !process.env.APP_BASE_URL) return false;
-    return supplied.origin === expected.origin && (!process.env.VERCEL || supplied.host === forwarded);
+    const origin = new URL(headers.origin);
+    if (!['http:', 'https:'].includes(origin.protocol)) return false;
+    const protocol = isSecure(req, headers) ? 'https:' : 'http:';
+    const hosts = [headers['x-forwarded-host'], headers.host]
+      .filter((value) => typeof value === 'string' && value.trim())
+      .map((value) => value.split(',')[0].trim());
+    return hosts.some((host) => {
+      try { return new URL(`${protocol}//${host}`).origin === origin.origin; }
+      catch { return false; }
+    });
   } catch { return false; }
 }
 
@@ -50,7 +56,7 @@ function isSecure(req, headers) {
 async function authenticatedRoute(path, method, body, headers, ip, secure) {
   const user = await sessionUser(headers);
   if (path === '/api/auth/me' && method === 'GET') {
-    return user ? { status: 200, body: { user } } : fail(401, 'AUTH_REQUIRED', 'Sign in to continue');
+    return { status: 200, body: { user: user || null } };
   }
   if (path === '/api/auth/logout' && method === 'POST') {
     await logout(headers);

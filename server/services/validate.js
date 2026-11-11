@@ -87,7 +87,11 @@ export function validateInvoice(b = {}, ctx = {}) {
 
   // Omitted invoice_no preserves automatic allocation on create, or the existing value on edit.
   // A user-entered blank/invalid number must fail rather than silently switching back to automatic.
-  if (b.invoice_no !== undefined && b.invoice_no !== null) {
+  // Legacy invoice numbers are immutable. An old client may submit a suggested
+  // modern number when editing; preserve the stored legacy number rather than
+  // reject the otherwise valid invoice update.
+  const legacyNumber = Boolean(ctx.existingInvoiceNo) && !/^(SI|SVI)\s*-\s*\d+$/i.test(ctx.existingInvoiceNo);
+  if (!legacyNumber && b.invoice_no !== undefined && b.invoice_no !== null) {
     const match = /^(SI|SVI)\s*-\s*(\d+)$/i.exec(t(b.invoice_no));
     const n = match ? Number(match[2]) : NaN;
     if (!match || !Number.isSafeInteger(n) || n <= 0) {
