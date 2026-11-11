@@ -90,7 +90,7 @@ export function validateInvoice(b = {}, ctx = {}) {
   // Legacy invoice numbers are immutable. An old client may submit a suggested
   // modern number when editing; preserve the stored legacy number rather than
   // reject the otherwise valid invoice update.
-  const legacyNumber = Boolean(ctx.existingInvoiceNo) && !/^(SI|SVI)\\s*-\\s*\\d+$/i.test(ctx.existingInvoiceNo);
+  const legacyNumber = Boolean(ctx.existingInvoiceNo) && !/^(SI|SVI)\s*-\s*\d+$/i.test(ctx.existingInvoiceNo);
   if (!legacyNumber && b.invoice_no !== undefined && b.invoice_no !== null) {
     const match = /^(SI|SVI)\s*-\s*(\d+)$/i.exec(t(b.invoice_no));
     const n = match ? Number(match[2]) : NaN;
