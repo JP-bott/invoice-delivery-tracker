@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
   const refresh = useCallback(async () => {
     try {
       const response = await request('/api/auth/me');
-      setUser(response.user);
+      setUser(response.user ?? null);
     } catch { setUser(null); }
     finally { setLoading(false); }
   }, []);
