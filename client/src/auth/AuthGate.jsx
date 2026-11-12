@@ -78,9 +78,25 @@ export function Signup() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [availability, setAvailability] = useState(null);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/signup-status', { cache: 'no-store', credentials: 'same-origin' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Availability check failed');
+        return response.json();
+      })
+      .then((status) => { if (active) setAvailability(status); })
+      .catch(() => { if (active) setAvailability(null); });
+    return () => { active = false; };
+  }, []);
   const set = (key) => (e) => setValues((current) => ({ ...current, [key]: e.target.value }));
   const submit = async (event) => {
     event.preventDefault(); setError('');
+    if (availability?.enabled === false) {
+      setError(availability.message || 'Account registration is temporarily unavailable.');
+      return;
+    }
     if (values.password !== confirm) { setError('Passwords do not match.'); return; }
     setBusy(true);
     try { const response = await signup(values); setNotice(response.message); }
@@ -98,6 +114,9 @@ export function Signup() {
         </div>
       ) : (
         <form onSubmit={submit} className="space-y-4">
+          {availability?.enabled === false && (
+            <p className={infoBox} role="status">{availability.message}</p>
+          )}
           {error && <p className={errorBox} role="alert">{error}</p>}
           <label className={inputLabel}>Full name
             <input className={field} name="name" autoComplete="name" minLength={2} maxLength={100} required value={values.name} onChange={set('name')} placeholder="Full name" />
@@ -115,7 +134,7 @@ export function Signup() {
             <input className={field} type="password" name="confirm-password" autoComplete="new-password" inputMode="numeric" pattern="[0-9]{8}" minLength={8} maxLength={8} required value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Repeat your password" />
           </label>
           <p className="text-xs leading-relaxed text-fg-muted"><LockKeyhole size={13} className="mr-1 inline" /> Your password is securely hashed before it is stored. Eight-digit passwords are less secure than longer passwords; do not reuse a PIN.</p>
-          <button disabled={busy} type="submit" className="btn btn-primary w-full justify-center">{busy ? 'Registering…' : 'Sign up'}<Mail size={16} /></button>
+          <button disabled={busy || availability?.enabled === false} type="submit" className="btn btn-primary w-full justify-center">{busy ? 'Registering…' : 'Sign up'}<Mail size={16} /></button>
         </form>
       )}
       <p className="mt-5 text-center text-sm text-fg-muted">Already registered? <Link to="/login" className="font-semibold text-brand-ink underline-offset-4 hover:underline">Sign in</Link></p>
