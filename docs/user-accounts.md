@@ -21,7 +21,8 @@ Set these in the Vercel project and, for local development, in the root `.env` f
 | --- | --- | --- |
 | `TURSO_DATABASE_URL` | `libsql://<database>.turso.io` | Existing Turso database |
 | `TURSO_AUTH_TOKEN` | secret | Existing Turso API token |
-| `AUTH_ALLOWED_DOMAINS` | `company.com` | Exact allowed company email domains, comma-separated |
+| `AUTH_ALLOWED_DOMAINS` | `company.com` | Exact allowed company email domains, comma-separated. Optional if exact-address allowlist is used. | 
+| `AUTH_ALLOWED_EMAILS` | `employee@gmail.com` | Optional individually approved email addresses, comma-separated. Do not authorize the whole Gmail domain. |
 | `APP_BASE_URL` | `https://your-app.example.com` | Public URL used in the verification email |
 | `RESEND_API_KEY` | secret | Resend transactional email API key |
 | `AUTH_FROM_EMAIL` | `Invoice Tracker <verify@company.com>` | Sender identity verified in Resend |
@@ -65,3 +66,16 @@ npm run dev
 ```
 
 The API creates new auth tables automatically on the first request; you can also apply `migrations/012_user_authentication.sql` with a Turso-compatible SQL client if you prefer controlled migration management.
+
+## Fix: signup returns 503 `AUTH_NOT_CONFIGURED`
+
+The message `Company email signup is not configured` means production registration is missing an allowlist. It cannot be repaired by changing the browser, password, or Turso database.
+
+1. Open the Vercel project for `invoice-delivery-tracker`, then **Settings → Environment Variables**.
+2. Set **one or both** of `AUTH_ALLOWED_DOMAINS` (for example, `company.com`) and `AUTH_ALLOWED_EMAILS` (for example, `approved.person@gmail.com`). Do not add `gmail.com` as a permitted domain unless every Gmail address should legitimately receive company access.
+3. Set `APP_BASE_URL=https://invoice-delivery-tracker.vercel.app` (or your actual canonical HTTPS domain).
+4. Set `RESEND_API_KEY` to the transactional email API key and `AUTH_FROM_EMAIL` to a sender address from a verified sending domain. These are separate from the intended recipient address and must remain secret server environment variables.
+5. Configure these for the **Production** environment (and **Preview** only if testing that deployment), then redeploy. Environment-variable changes are not automatically applied to already-built deployments.
+6. Verify `GET /api/auth/signup-status` returns `{ "enabled": true, "message": null }` without exposing configured addresses or secrets. Create and verify a new test account.
+
+If settings are missing, the signup page now displays a non-technical configuration warning and disables submission. The API does not create a pending user until the email service configuration is present. A verified sender domain and valid API key are required to actually deliver the email; configuration readiness cannot confirm the provider account is working.
