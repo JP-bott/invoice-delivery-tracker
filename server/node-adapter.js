@@ -5,7 +5,7 @@ import { fail, errorResponse } from './http.js';
 import { ensureSchema } from './database/db.js';
 import {
   signup, signin, verifyEmail, resendVerification, sessionUser, logout,
-  sessionCookie, clearSessionCookie,
+  sessionCookie, clearSessionCookie, signupConfiguration,
 } from './services/authService.js';
 
 async function readBody(req) {
@@ -25,7 +25,7 @@ async function readBody(req) {
   return raw.trim() ? JSON.parse(raw) : undefined;
 }
 
-const authRoutes = new Set(['/api/auth/signup', '/api/auth/signin', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/logout', '/api/auth/me']);
+const authRoutes = new Set(['/api/auth/signup', '/api/auth/signin', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/logout', '/api/auth/me', '/api/auth/signup-status']);
 const businessRoutes = new Set(['products', 'clients', 'invoice-fields', 'dashboard-filters', 'timeline-stages', 'invoices', 'dashboard', 'filters']);
 const isMutation = (method) => !['GET', 'HEAD', 'OPTIONS'].includes(method);
 const toObject = (headers = {}) => Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
@@ -55,6 +55,7 @@ function isSecure(req, headers) {
 
 async function authenticatedRoute(path, method, body, headers, ip, secure) {
   const user = await sessionUser(headers);
+  if (path === '/api/auth/signup-status' && method === 'GET') return { status: 200, body: signupConfiguration() };
   if (path === '/api/auth/me' && method === 'GET') {
     return { status: 200, body: { user: user || null } };
   }
