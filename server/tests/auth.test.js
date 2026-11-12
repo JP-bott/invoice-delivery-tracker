@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { nodeHandler } from '../node-adapter.js';
-import { resetDb } from '../database/db.js';
+import { getDb, resetDb } from '../database/db.js';
 
 let emailMessage;
 let oldEnv;
@@ -39,6 +39,57 @@ beforeAll(() => {
 afterAll(() => { globalThis.fetch = oldFetch; process.env = oldEnv; resetDb(); });
 
 describe('authenticated company workspace', () => {
+  it('reports unavailable signup and refuses to store accounts if settings are missing', async () => {
+    const previous = {
+      domains: process.env.AUTH_ALLOWED_DOMAINS, emails: process.env.AUTH_ALLOWED_EMAILS,
+      key: process.env.RESEND_API_KEY, sender: process.env.AUTH_FROM_EMAIL,
+    };
+    try {
+      delete process.env.AUTH_ALLOWED_DOMAINS;
+      delete process.env.AUTH_ALLOWED_EMAILS;
+      const status = await request('GET', '/api/auth/signup-status');
+      expect(status.status).toBe(200);
+      expect(status.body.enabled).toBe(false);
+      expect(status.body).not.toHaveProperty('domains');
+      const result = await signup('unconfigured@example.com');
+      expect(result.status).toBe(503);
+      expect(result.body.error.code).toBe('AUTH_NOT_CONFIGURED');
+      const rows = await getDb().execute({ sql: 'SELECT id FROM users WHERE email = ?', args: ['unconfigured@example.com'] });
+      expect(rows.rows).toHaveLength(0);
+      process.env.AUTH_ALLOWED_DOMAINS = 'example.com';
+      delete process.env.RESEND_API_KEY;
+      expect((await signup('no-mail@example.com')).status).toBe(503);
+      const after = await getDb().execute({ sql: 'SELECT id FROM users WHERE email = ?', args: ['no-mail@example.com'] });
+      expect(after.rows).toHaveLength(0);
+    } finally {
+      if (previous.domains === undefined) delete process.env.AUTH_ALLOWED_DOMAINS;
+      else process.env.AUTH_ALLOWED_DOMAINS = previous.domains;
+      if (previous.emails === undefined) delete process.env.AUTH_ALLOWED_EMAILS;
+      else process.env.AUTH_ALLOWED_EMAILS = previous.emails;
+      if (previous.key === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previous.key;
+      if (previous.sender === undefined) delete process.env.AUTH_FROM_EMAIL;
+      else process.env.AUTH_FROM_EMAIL = previous.sender;
+    }
+    expect((await request('GET', '/api/auth/signup-status')).body.enabled).toBe(true);
+  });
+
+  it('allows an explicitly authorized individual email without opening its entire domain', async () => {
+    const oldDomains = process.env.AUTH_ALLOWED_DOMAINS;
+    const oldEmails = process.env.AUTH_ALLOWED_EMAILS;
+    try {
+      delete process.env.AUTH_ALLOWED_DOMAINS;
+      process.env.AUTH_ALLOWED_EMAILS = 'approved-person@gmail.com';
+      expect((await signup('someone-else@gmail.com')).status).toBe(422);
+      expect((await signup('approved-person@gmail.com')).status).toBe(200);
+      expect(emailMessage.to).toEqual(['approved-person@gmail.com']);
+    } finally {
+      if (oldDomains === undefined) delete process.env.AUTH_ALLOWED_DOMAINS;
+      else process.env.AUTH_ALLOWED_DOMAINS = oldDomains;
+      if (oldEmails === undefined) delete process.env.AUTH_ALLOWED_EMAILS;
+      else process.env.AUTH_ALLOWED_EMAILS = oldEmails;
+    }
+  });
   it('rejects public-domain account registrations and invalid 8-digit PINs', async () => {
     expect((await signup('person@gmail.com')).status).toBe(422);
     expect((await signup('person@example.com', 'password')).status).toBe(422);
