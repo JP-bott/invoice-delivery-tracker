@@ -10,7 +10,7 @@ const devApi = (mode) => ({
   apply: 'serve',
   async configureServer(server) {
     const env = loadEnv(mode, path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), '');
-    for (const k of ['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN', 'AUTH_ALLOWED_DOMAINS', 'APP_BASE_URL', 'RESEND_API_KEY', 'AUTH_FROM_EMAIL']) if (env[k] && !process.env[k]) process.env[k] = env[k];
+    for (const k of ['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN', 'AUTH_ALLOWED_DOMAINS', 'AUTH_ALLOWED_EMAILS', 'APP_BASE_URL', 'RESEND_API_KEY', 'AUTH_FROM_EMAIL']) if (env[k] && !process.env[k]) process.env[k] = env[k];
     const { nodeHandler } = await import('../server/node-adapter.js');
     server.middlewares.use((req, res, next) => (req.url.startsWith('/api') ? nodeHandler(req, res) : next()));
   },
