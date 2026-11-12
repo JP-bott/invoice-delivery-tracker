@@ -22,11 +22,35 @@ function validEmail(raw) {
   const email = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
 }
+function signupAllowlist() {
+  // An explicit address is useful for a small team with personal mailboxes.
+  // Do not authorize all gmail.com or other public email providers by default.
+  const domains = (process.env.AUTH_ALLOWED_DOMAINS || '').split(',')
+    .map((s) => s.trim().toLowerCase().replace(/^@/, '')).filter(Boolean);
+  const emails = (process.env.AUTH_ALLOWED_EMAILS || '').split(',')
+    .map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return { domains, emails };
+}
 function allowedEmail(email) {
-  // Company control: no arbitrary public signups, even if a user owns a mailbox.
-  const allowed = (process.env.AUTH_ALLOWED_DOMAINS || '').split(',').map((s) => s.trim().toLowerCase().replace(/^@/, '')).filter(Boolean);
-  if (!allowed.length) throw httpError(503, 'Company email signup is not configured', 'AUTH_NOT_CONFIGURED');
-  return allowed.includes(email.split('@')[1]);
+  const { domains, emails } = signupAllowlist();
+  if (!domains.length && !emails.length) {
+    throw httpError(503, 'Registration is not configured. Contact the site administrator.', 'AUTH_NOT_CONFIGURED');
+  }
+  return domains.includes(email.split('@')[1]) || emails.includes(email);
+}
+export function signupConfiguration() {
+  const { domains, emails } = signupAllowlist();
+  const domainConfigured = domains.length > 0 || emails.length > 0;
+  const mailConfigured = Boolean(process.env.RESEND_API_KEY && process.env.AUTH_FROM_EMAIL);
+  let urlConfigured = false;
+  try { verificationBase(); urlConfigured = true; } catch { /* URL not ready */ }
+  const enabled = domainConfigured && mailConfigured && urlConfigured;
+  return { enabled, message: enabled ? null : 'Account registration is not available yet. Please contact the site administrator to complete the signup and email verification setup.' };
+}
+function requireSignupConfigured() {
+  if (!signupConfiguration().enabled) {
+    throw httpError(503, 'Account registration is not available yet. Ask the site administrator to configure approved emails and verification email delivery.', 'AUTH_NOT_CONFIGURED');
+  }
 }
 function validateSignup(body) {
   const name = typeof body?.name === 'string' ? body.name.replace(/\s+/g, ' ').trim() : '';
@@ -105,6 +129,7 @@ async function sendVerification(email, token) {
   }
 }
 async function issueVerification(userId, email) {
+  requireSignupConfigured();
   const token = newToken();
   const db = getDb();
   await db.execute({
@@ -116,6 +141,8 @@ async function issueVerification(userId, email) {
 
 export async function signup(body, ip) {
   const values = validateSignup(body);
+  // Fail before creating a user row if email verification cannot be delivered.
+  requireSignupConfigured();
   await throttle('signup', values.email, ip, 5, 60 * 60 * 1000);
   const db = getDb();
   const current = (await db.execute({ sql: 'SELECT id,verified_at FROM users WHERE email = ?', args: [values.email] })).rows[0];
@@ -139,6 +166,7 @@ export async function signup(body, ip) {
 }
 
 export async function resendVerification(body, ip) {
+  requireSignupConfigured();
   const email = validEmail(body?.email);
   if (!email) throw httpError(422, 'Enter a valid email address', 'VALIDATION_ERROR');
   await throttle('resend', email, ip, 3, 60 * 60 * 1000);
